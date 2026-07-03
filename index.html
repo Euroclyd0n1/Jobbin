@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chew Good — For People Who Love Dogs, Honestly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #F5EFE4;
+      --warm-white: #FAF7F2;
+      --brown: #3B2A1A;
+      --amber: #C4813A;
+      --terracotta: #B85C38;
+      --sage: #7A8C6E;
+      --light-sage: #D4DDCD;
+      --muted: #8C7B6B;
+      --border: #DDD5C8;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background-color: var(--warm-white);
+      color: var(--brown);
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 3rem;
+      background: rgba(250, 247, 242, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: var(--brown);
+      text-decoration: none;
+    }
+
+    .nav-logo span { color: var(--amber); }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 0.875rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--brown); }
+
+    .nav-cta {
+      background: var(--brown);
+      color: var(--cream) !important;
+      padding: 0.5rem 1.25rem;
+      border-radius: 2rem;
+      transition: background 0.2s !important;
+    }
+
+    .nav-cta:hover { background: var(--amber) !important; color: var(--cream) !important; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding-top: 5rem;
+      overflow: hidden;
+    }
+
+    .hero-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 5rem 4rem 5rem 5rem;
+      animation: fadeUp 0.9s ease both;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-tag::before {
+      content: '';
+      display: block;
+      width: 2rem;
+      height: 1px;
+      background: var(--amber);
+    }
+
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(3rem, 5vw, 5rem);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 em {
+      font-style: italic;
+      color: var(--amber);
+    }
+
+    .hero-sub {
+      font-size: 1.1rem;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 420px;
+      margin-bottom: 2.5rem;
+      font-weight: 300;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .btn-primary {
+      background: var(--brown);
+      color: var(--cream);
+      padding: 0.875rem 2rem;
+      border-radius: 3rem;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: background 0.2s, transform 0.2s;
+      display: inline-block;
+    }
+
+    .btn-primary:hover { background: var(--amber); transform: translateY(-1px); }
+
+    .btn-secondary {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: color 0.2s;
+    }
+
+    .btn-secondary:hover { color: var(--brown); }
+
+    .hero-stats {
+      display: flex;
+      gap: 2.5rem;
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .stat-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--brown);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.2rem;
+    }
+
+    .hero-right {
+      background: var(--cream);
+      position: relative;
+      overflow: hidden;
+      animation: fadeIn 1.2s ease both;
+    }
+
+    .hero-image-grid {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      padding: 1rem;
+    }
+
+    .img-placeholder {
+      border-radius: 1rem;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .img-placeholder.large {
+      grid-row: 1 / 3;
+    }
+
+    .dog-svg {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Dog illustration placeholders with warm tones */
+    .dog-card {
+      border-radius: 1rem;
+      overflow: hidden;
+      background: var(--light-sage);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .dog-card.warm { background: #E8D5B7; }
+    .dog-card.sage { background: var(--light-sage); }
+    .dog-card.terra { background: #E8C4A0; }
+
+    .dog-icon {
+      font-size: 5rem;
+      opacity: 0.5;
+    }
+
+    .card-label {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background: rgba(59,42,26,0.75);
+      color: #FAF7F2;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.75rem;
+      border-radius: 2rem;
+      backdrop-filter: blur(4px);
+    }
+
+    /* ── MARQUEE ── */
+    .marquee-wrap {
+      background: var(--brown);
+      color: var(--cream);
+      overflow: hidden;
+      padding: 0.75rem 0;
+    }
+
+    .marquee-track {
+      display: flex;
+      gap: 3rem;
+      white-space: nowrap;
+      animation: marquee 28s linear infinite;
+    }
+
+    .marquee-item {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 1rem;
+      opacity: 0.85;
+      flex-shrink: 0;
+    }
+
+    .marquee-dot {
+      color: var(--amber);
+      margin-right: 3rem;
+    }
+
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    /* ── ABOUT ── */
+    .about {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      min-height: 70vh;
+    }
+
+    .about-visual {
+      background: var(--light-sage);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4rem;
+      overflow: hidden;
+    }
+
+    .about-circle {
+      width: 340px;
+      height: 340px;
+      border-radius: 50%;
+      background: var(--sage);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .about-ring {
+      position: absolute;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      border: 1px dashed var(--sage);
+      opacity: 0.5;
+      animation: spin 30s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .about-content {
+      padding: 5rem 5rem 5rem 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 1.25rem;
+    }
+
+    h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 3.5vw, 3rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.25rem;
+    }
+
+    h2 em {
+      font-style: italic;
+      color: var(--amber);
+    }
+
+    .body-text {
+      font-size: 1rem;
+      color: var(--muted);
+      line-height: 1.8;
+      font-weight: 300;
+      margin-bottom: 1rem;
+    }
+
+    .about-values {
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .value-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .value-icon {
+      font-size: 1.25rem;
+      margin-top: 0.1rem;
+    }
+
+    .value-text strong {
+      display: block;
+      font-weight: 500;
+      font-size: 0.95rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .value-text span {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── CONTENT PILLARS ── */
+    .pillars {
+      background: var(--cream);
+      padding: 6rem 5rem;
+    }
+
+    .pillars-header {
+      max-width: 560px;
+      margin-bottom: 4rem;
+    }
+
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+
+    .pillar-card {
+      background: var(--warm-white);
+      border-radius: 1.5rem;
+      padding: 2.5rem 2rem;
+      border: 1px solid var(--border);
+      transition: transform 0.3s, box-shadow 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pillar-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--amber);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s;
+    }
+
+    .pillar-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(59,42,26,0.08);
+    }
+
+    .pillar-card:hover::after { transform: scaleX(1); }
+
+    .pillar-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1.25rem;
+      display: block;
+    }
+
+    .pillar-card h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.01em;
+    }
+
+    .pillar-card p {
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .pillar-tag {
+      display: inline-block;
+      margin-top: 1.5rem;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--amber);
+      border: 1px solid var(--amber);
+      padding: 0.3rem 0.75rem;
+      border-radius: 2rem;
+    }
+
+    /* ── FEATURED POST ── */
+    .featured {
+      padding: 6rem 5rem;
+      background: var(--warm-white);
+    }
+
+    .featured-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .featured-visual {
+      background: var(--cream);
+      border-radius: 2rem;
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8rem;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .featured-visual::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 30% 70%, #E8D5B7 0%, transparent 60%);
+    }
+
+    .featured-visual span { position: relative; z-index: 1; }
+
+    .featured-content {}
+
+    .post-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .post-category {
+      background: var(--light-sage);
+      color: var(--sage);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.75rem;
+      border-radius: 2rem;
+    }
+
+    .post-date {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .featured-content h2 {
+      margin-bottom: 1rem;
+    }
+
+    .read-more {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+      color: var(--amber);
+      font-weight: 500;
+      font-size: 0.9rem;
+      text-decoration: none;
+      transition: gap 0.2s;
+    }
+
+    .read-more:hover { gap: 0.75rem; }
+
+    /* ── NEWSLETTER ── */
+    .newsletter {
+      background: var(--brown);
+      color: var(--cream);
+      padding: 6rem 5rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .newsletter::before {
+      content: '🐾';
+      position: absolute;
+      font-size: 20rem;
+      opacity: 0.04;
+      top: -3rem;
+      left: -3rem;
+    }
+
+    .newsletter::after {
+      content: '🐾';
+      position: absolute;
+      font-size: 20rem;
+      opacity: 0.04;
+      bottom: -3rem;
+      right: -3rem;
+    }
+
+    .newsletter-inner {
+      max-width: 560px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .newsletter h2 {
+      color: var(--cream);
+      margin-bottom: 1rem;
+    }
+
+    .newsletter h2 em { color: var(--amber); }
+
+    .newsletter p {
+      color: rgba(245,239,228,0.7);
+      font-size: 1rem;
+      line-height: 1.7;
+      margin-bottom: 2.5rem;
+    }
+
+    .signup-form {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .signup-form input {
+      flex: 1;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: var(--cream);
+      padding: 0.875rem 1.25rem;
+      border-radius: 3rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .signup-form input::placeholder { color: rgba(245,239,228,0.45); }
+    .signup-form input:focus { border-color: var(--amber); }
+
+    .signup-form button {
+      background: var(--amber);
+      color: var(--cream);
+      border: none;
+      padding: 0.875rem 1.75rem;
+      border-radius: 3rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+      white-space: nowrap;
+    }
+
+    .signup-form button:hover {
+      background: var(--terracotta);
+      transform: translateY(-1px);
+    }
+
+    .signup-note {
+      font-size: 0.78rem;
+      color: rgba(245,239,228,0.45);
+      margin-top: 1rem;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--brown);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 2rem 5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: var(--cream);
+    }
+
+    .footer-logo span { color: var(--amber); }
+
+    footer p {
+      font-size: 0.8rem;
+      color: rgba(245,239,228,0.4);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .footer-links a {
+      font-size: 0.8rem;
+      color: rgba(245,239,228,0.45);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--amber); }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      nav { padding: 1rem 1.5rem; }
+      .nav-links { display: none; }
+      .hero { grid-template-columns: 1fr; min-height: auto; }
+      .hero-left { padding: 7rem 1.5rem 3rem; }
+      .hero-right { min-height: 50vw; }
+      .about { grid-template-columns: 1fr; }
+      .about-visual { min-height: 300px; padding: 3rem; }
+      .about-content { padding: 3rem 1.5rem; }
+      .pillars { padding: 4rem 1.5rem; }
+      .pillars-grid { grid-template-columns: 1fr; }
+      .featured { padding: 4rem 1.5rem; }
+      .featured-inner { grid-template-columns: 1fr; }
+      .newsletter { padding: 4rem 1.5rem; }
+      .signup-form { flex-direction: column; }
+      footer { flex-direction: column; gap: 1rem; padding: 2rem 1.5rem; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="#" class="nav-logo">Chew<span>Good</span></a>
+    <ul class="nav-links">
+      <li><a href="#about">About</a></li>
+      <li><a href="#stories">Stories</a></li>
+      <li><a href="#advice">Advice</a></li>
+      <li><a href="#newsletter" class="nav-cta">Join the Pack</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-left">
+      <span class="hero-tag">A space for dog people</span>
+      <h1>For people who love dogs, <em>honestly.</em></h1>
+      <p class="hero-sub">
+        Not just the cute photos and funny videos. The real stuff — the muddy walks, the sleepless nights, the unconditional love, and everything in between.
+      </p>
+      <div class="hero-actions">
+        <a href="#stories" class="btn-primary">Start Reading</a>
+        <a href="#about" class="btn-secondary">Our story →</a>
+      </div>
+      <div class="hero-stats">
+        <div>
+          <div class="stat-num">Real</div>
+          <div class="stat-label">Stories</div>
+        </div>
+        <div>
+          <div class="stat-num">Honest</div>
+          <div class="stat-label">Advice</div>
+        </div>
+        <div>
+          <div class="stat-num">Good</div>
+          <div class="stat-label">Community</div>
+        </div>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-image-grid">
+        <div class="dog-card warm large">
+          <span class="dog-icon">🐕</span>
+          <span class="card-label">Out & About</span>
+        </div>
+        <div class="dog-card sage">
+          <span class="dog-icon">🐶</span>
+          <span class="card-label">Good Days</span>
+        </div>
+        <div class="dog-card terra">
+          <span class="dog-icon">🦴</span>
+          <span class="card-label">Hard Days Too</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MARQUEE -->
+  <div class="marquee-wrap">
+    <div class="marquee-track">
+      <span class="marquee-item">The highs</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The muddy floors</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The 3am wake-ups</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The best cuddles</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The goodbyes</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The hellos</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The walks in the rain</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The unconditional love</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The highs</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The muddy floors</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The 3am wake-ups</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The best cuddles</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The goodbyes</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The hellos</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The walks in the rain</span><span class="marquee-dot">·</span>
+      <span class="marquee-item">The unconditional love</span><span class="marquee-dot">·</span>
+    </div>
+  </div>
+
+  <!-- ABOUT -->
+  <section class="about" id="about">
+    <div class="about-visual">
+      <div class="about-ring"></div>
+      <div class="about-circle">🐾</div>
+    </div>
+    <div class="about-content reveal">
+      <span class="section-label">Who we are</span>
+      <h2>Dog content that doesn't pretend everything is <em>perfect.</em></h2>
+      <p class="body-text">
+        The internet is full of highlight reels — perfectly behaved dogs, spotless homes, and endless cuteness. Chew Good is for the rest of us.
+      </p>
+      <p class="body-text">
+        Whether you're in the thick of puppyhood, navigating the golden years, or somewhere in the messy middle — there's a place here for your experience.
+      </p>
+      <div class="about-values">
+        <div class="value-item">
+          <span class="value-icon">🧡</span>
+          <div class="value-text">
+            <strong>Honest stories</strong>
+            <span>From real dog owners, about real dogs — no filter required.</span>
+          </div>
+        </div>
+        <div class="value-item">
+          <span class="value-icon">🐾</span>
+          <div class="value-text">
+            <strong>Practical advice</strong>
+            <span>Grounded guidance, not just what sounds good on paper.</span>
+          </div>
+        </div>
+        <div class="value-item">
+          <span class="value-icon">🤝</span>
+          <div class="value-text">
+            <strong>Real community</strong>
+            <span>People who get it, because they've lived it too.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PILLARS -->
+  <section class="pillars" id="stories">
+    <div class="pillars-header reveal">
+      <span class="section-label">What we cover</span>
+      <h2>Every part of life with a <em>dog.</em></h2>
+    </div>
+    <div class="pillars-grid">
+      <div class="pillar-card reveal">
+        <span class="pillar-icon">📖</span>
+        <h3>Stories</h3>
+        <p>Personal essays and honest accounts from dog owners at every stage. The funny, the hard, the mundane, and the unforgettable.</p>
+        <span class="pillar-tag">Real voices</span>
+      </div>
+      <div class="pillar-card reveal">
+        <span class="pillar-icon">🦮</span>
+        <h3>Advice</h3>
+        <p>Practical, no-nonsense guidance on training, health, behaviour and everything else that comes with a dog in the house.</p>
+        <span class="pillar-tag">Grounded tips</span>
+      </div>
+      <div class="pillar-card reveal">
+        <span class="pillar-icon">💬</span>
+        <h3>Community</h3>
+        <p>A place to share, ask questions, and find your people — whether you're celebrating a milestone or just need someone who understands.</p>
+        <span class="pillar-tag">Dog people only</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURED POST -->
+  <section class="featured" id="advice">
+    <div class="featured-inner">
+      <div class="featured-visual">
+        <span>🐕‍🦺</span>
+      </div>
+      <div class="featured-content reveal">
+        <div class="post-meta">
+          <span class="post-category">Stories</span>
+          <span class="post-date">Coming soon</span>
+        </div>
+        <h2>The things nobody tells you about getting a dog — and the things you'd never trade.</h2>
+        <p class="body-text">
+          Everyone warns you about the chewed shoes and the vet bills. Nobody prepares you for the way they change you. This is that story.
+        </p>
+        <a href="#newsletter" class="read-more">Get notified when we launch →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- NEWSLETTER -->
+  <section class="newsletter" id="newsletter">
+    <div class="newsletter-inner">
+      <span class="section-label" style="color: var(--amber);">Join the pack</span>
+      <h2>Good stuff, straight to your <em>inbox.</em></h2>
+      <p>Stories, advice, and the occasional reminder that you're not the only one whose dog ate something they shouldn't have. No spam, ever.</p>
+      <div class="signup-form">
+        <input type="email" placeholder="your@email.com" />
+        <button type="button">Sign me up</button>
+      </div>
+      <p class="signup-note">No spam. Unsubscribe any time. Just dog stuff.</p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <span class="footer-logo">Chew<span>Good</span></span>
+    <p>© 2026 Chew Good. Made with love for dogs.</p>
+    <div class="footer-links">
+      <a href="#">About</a>
+      <a href="#">Write for us</a>
+      <a href="#">Contact</a>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll reveal
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => entry.target.classList.add('visible'), i * 100);
+        }
+      });
+    }, { threshold: 0.1 });
+    reveals.forEach(el => observer.observe(el));
+
+    // Email signup
+    const btn = document.querySelector('.signup-form button');
+    const input = document.querySelector('.signup-form input');
+    btn.addEventListener('click', () => {
+      if (input.value && input.value.includes('@')) {
+        btn.textContent = '🐾 You\'re in!';
+        btn.style.background = '#7A8C6E';
+        input.value = '';
+        input.disabled = true;
+        btn.disabled = true;
+      } else {
+        input.style.borderColor = '#B85C38';
+        setTimeout(() => input.style.borderColor = '', 1000);
+      }
+    });
+  </script>
+
+</body>
+</html>
