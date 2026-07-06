@@ -1005,18 +1005,18 @@ function viewDashboard(){
       '<div class="attn-list">'+items.map(function(it){
         if(it.kind==='job'){
           var m=statusMeta(it.job.status);
-          '<span class="attn-tag '+(it.over?'over':'soon')+'"><i data-lucide="calendar"></i>'+(it.over?'Overdue':'Due soon')+'</span>'+
-            '<span class="attn-tag '+(it.over?'over':'soon')+'">'+(it.over?'Overdue':'Due soon')+'</span>'+
+          return '<div class="attn-row" data-attn="'+it.job.id+'">'+
+            '<span class="attn-tag '+(it.over?'over':'soon')+'"><i data-lucide="calendar"></i>'+(it.over?'Overdue':'Due soon')+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+esc(it.job.wqRef||'—')+' · '+esc(it.job.client||'')+(it.job.site?' · '+esc(it.job.site):'')+'</div><div class="attn-desc">'+esc(it.job.description||'')+'</div></div>'+
             '<span class="attn-status"><span class="pill" style="color:'+m.c+';background:'+m.bg+'">'+esc(it.job.status)+'</span></span>'+
             '<span class="attn-due" style="'+(it.over?'color:var(--red)':'')+'">'+fmtDate(it.date)+'</span>'+
           '</div>';
         } else {
           var t=it.task; var lw=t.linkedWorkId?workById(t.linkedWorkId):null;
-          '<span class="attn-tag '+(it.chase?(it.over?'now':'task'):(it.over?'over':'soon'))+'"><i data-lucide="'+(it.chase?'phone-call':'calendar')+'"></i>'+lab+'</span>'+
+          var lab= it.chase ? (it.over?'Chase now':'Chase') : (it.over?'Overdue':'Due soon');
           var ref = lw ? esc(lw.wqRef||'WQ')+' · task' : 'Task';
           return '<div class="attn-row" data-attntask="'+t.id+'">'+
-            '<span class="attn-tag '+(it.chase?(it.over?'now':'task'):(it.over?'over':'soon'))+'">'+(it.chase&&it.over?'<i data-lucide="phone-call"></i>':'')+lab+'</span>'+
+            '<span class="attn-tag '+(it.chase?(it.over?'now':'task'):(it.over?'over':'soon'))+'"><i data-lucide="'+(it.chase?'phone-call':'calendar')+'"></i>'+lab+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+ref+'</div><div class="attn-desc">'+esc(t.title)+'</div></div>'+
             '<span class="attn-status"><span class="pill" style="color:var(--green-deep);background:var(--accent-soft)">'+esc(GTD_LABEL[t.bucket]||'Task')+'</span></span>'+
             '<span class="attn-due" style="'+(it.over?'color:var(--red)':'')+'">'+fmtDate(it.date)+'</span>'+
