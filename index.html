@@ -251,10 +251,10 @@ a{ color:inherit; }
 .attn-row{ display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:13px; padding:9px 9px; border-radius:var(--r-sm); cursor:pointer; transition:background .12s; border-top:1px solid var(--line-soft); }
 .attn-row:first-child{ border-top:none; }
 .attn-row:hover{ background:var(--surface-2); }
-.attn-tag{ font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:0.03em; }
-.attn-tag.over{ background:var(--red); color:var(--surface); }
-.attn-tag.soon{ background:var(--amber-soft); color:var(--amber-deep); border:1px solid var(--amber); }
-.attn-tag.task{ background:var(--accent-soft); color:var(--green-deep); border:1px solid var(--green-line); }
+.attn-tag{ display:inline-flex; align-items:center; justify-content:center; min-width:74px; font-size:0.68rem; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:0.05em; border:1px solid transparent; }
+.attn-tag.over{ background:var(--red); color:var(--surface); border-color:var(--red); }
+.attn-tag.soon{ background:var(--amber-soft); color:var(--amber-deep); border-color:var(--amber); }
+.attn-tag.task{ background:var(--accent-soft); color:var(--green-deep); border-color:var(--green-line); }
 .attn-main{ min-width:0; }
 .attn-ref{ font-weight:640; font-size:0.86rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .attn-desc{ font-size:0.78rem; color:var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
