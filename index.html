@@ -1015,7 +1015,7 @@ function viewDashboard(){
           var lab= it.chase ? (it.over?'Chase now':'Chase') : (it.over?'Overdue':'Due soon');
           var ref = lw ? esc(lw.wqRef||'WQ')+' · task' : 'Task';
           return '<div class="attn-row" data-attntask="'+t.id+'">'+
-            '<span class="attn-tag '+(it.over?'over':(it.chase?'task':'soon'))+'">'+lab+'</span>'+
+            '<span class="attn-tag '+(it.chase?(it.over?'now':'task'):(it.over?'over':'soon'))+'">'+(it.chase&&it.over?'<i data-lucide="phone-call"></i>':'')+lab+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+ref+'</div><div class="attn-desc">'+esc(t.title)+'</div></div>'+
             '<span class="attn-status"><span class="pill" style="color:var(--green-deep);background:var(--accent-soft)">'+esc(GTD_LABEL[t.bucket]||'Task')+'</span></span>'+
             '<span class="attn-due" style="'+(it.over?'color:var(--red)':'')+'">'+fmtDate(it.date)+'</span>'+
