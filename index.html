@@ -256,8 +256,8 @@ a{ color:inherit; }
 .attn-tag.over{ background:var(--red); color:var(--surface); border-color:var(--red); }
 .attn-tag.now{ background:var(--red-soft); color:var(--red); border-color:var(--red); }
 .attn-tag.soon{ background:var(--green-soft); color:var(--green-deep); border-color:var(--green-line); }
-.attn-tag.task{ padding-inline:8px; background:var(--amber-soft); color:var(--amber-deep); border-color:var(--amber); }
-.attn-row:hover .attn-tag.task{ background:var(--amber-soft); color:var(--amber-deep); border-color:var(--amber); }
+.attn-tag.chase{ background:var(--amber-soft); color:var(--amber-deep); border-color:var(--amber); }
+.attn-row:hover .attn-tag.chase{ background:var(--amber-soft); color:var(--amber-deep); border-color:var(--amber); }
 .attn-main{ min-width:0; }
 .attn-ref{ font-weight:640; font-size:0.86rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .attn-desc{ font-size:0.78rem; color:var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1017,7 +1017,7 @@ function viewDashboard(){
           var lab= it.chase ? (it.over?'Chase now':'Chase') : (it.over?'Overdue':'Due soon');
           var ref = lw ? esc(lw.wqRef||'WQ')+' · task' : 'Task';
           return '<div class="attn-row" data-attntask="'+t.id+'">'+
-            '<span class="attn-tag '+(it.chase?(it.over?'now':'task'):(it.over?'over':'soon'))+'"><i data-lucide="'+(it.chase?'phone-call':'calendar')+'"></i>'+lab+'</span>'+
+            '<span class="attn-tag '+(it.chase?(it.over?'now':'chase'):(it.over?'over':'soon'))+'"><i data-lucide="'+(it.chase?'phone-call':'calendar')+'"></i>'+lab+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+ref+'</div><div class="attn-desc">'+esc(t.title)+'</div></div>'+
             '<span class="attn-status"><span class="pill" style="color:var(--green-deep);background:var(--accent-soft)">'+esc(GTD_LABEL[t.bucket]||'Task')+'</span></span>'+
             '<span class="attn-due" style="'+(it.over?'color:var(--red)':'')+'">'+fmtDate(it.date)+'</span>'+
