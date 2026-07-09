@@ -662,7 +662,7 @@ var avc=function(n){ return AVCOL[[].reduce.call(n||'',function(a,c){return a+c.
 var fmtDate=function(d){ return d?new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—'; };
 var relTime=function(t){ var m=(Date.now()-t)/60000; if(m<1)return'just now'; if(m<60)return Math.floor(m)+'m ago'; if(m<1440)return Math.floor(m/60)+'h ago'; return Math.floor(m/1440)+'d ago'; };
 function strip(html){ var d=document.createElement('div'); d.innerHTML=html||''; return d.textContent||''; }
-function workLabel(w){ return [w.wqRef||'WQ',w.client,w.site].filter(Boolean).join(' · '); }
+function workLabel(w){ return [w.wqRef||'Job',w.client,w.site].filter(Boolean).join(' · '); }
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 /* ---- IndexedDB: files store (attachments) + state store (register) ---- */
 function idbOpen(){return new Promise(function(resolve,reject){var req=indexedDB.open(FILE_DB,DB_VERSION);req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains(FILE_STORE))db.createObjectStore(FILE_STORE,{keyPath:'id'});if(!db.objectStoreNames.contains(STATE_STORE))db.createObjectStore(STATE_STORE);};req.onsuccess=function(){resolve(req.result);};req.onerror=function(){reject(req.error);};});}
@@ -961,7 +961,7 @@ function refreshOverviewRow(id){
   icons();
 }
 var view='dashboard';
-var TITLES={dashboard:['Dashboard','Overview of your WebQuote register'],overview:['Overview','WebQuote register — click the WQ Ref to open a job, the speech bubble for updates'],tasks:['Tasks','GTD — capture, organise & track every action'],clients:['Clients','Client › regional manager › site › people'],internal:['Internal','Your internal colleagues'],scps:['Supply Chain','Partners, trades & performance'],settings:['Settings','Appearance, storage, Drive backup, trades, export']};
+var TITLES={dashboard:['Dashboard','Overview of your job register'],overview:['Overview','Job register — click the Job ref to open a job, the speech bubble for updates'],tasks:['Tasks','GTD — capture, organise & track every action'],clients:['Clients','Client › regional manager › site › people'],internal:['Internal','Your internal colleagues'],scps:['Supply Chain','Partners, trades & performance'],settings:['Settings','Appearance, storage, Drive backup, trades, export']};
 function go(v){ view=v; $$('#nav button').forEach(function(b){ b.classList.toggle('on',b.dataset.view===v); }); var t=TITLES[v]||TITLES.dashboard; $('#ttl').textContent=t[0]; $('#sub').textContent=t[1]; render(); closeSide(); }
 function closeSide(){ var s=$('#side'); if(s)s.classList.remove('show'); }
 function overdueCount(){ var today=isoIn(0); return DB.works.filter(function(x){return x.dueDate&&x.dueDate<today&&CLOSED.indexOf(x.status)<0;}).length; }
@@ -1021,7 +1021,7 @@ function viewDashboard(){
         } else {
           var t=it.task; var lw=t.linkedWorkId?workById(t.linkedWorkId):null;
           var lab= it.chase ? (it.over?'Chase now':'Chase') : (it.over?'Overdue':'Due soon');
-          var ref = lw ? esc(lw.wqRef||'WQ')+' · task' : 'Task';
+          var ref = lw ? esc(lw.wqRef||'Job')+' · task' : 'Task';
           return '<div class="attn-row" data-attntask="'+t.id+'">'+
             '<span class="attn-tag '+(it.chase?(it.over?'now':'chase'):(it.over?'over':'soon'))+'"><i data-lucide="'+(it.chase?'phone-call':'calendar')+'"></i>'+lab+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+ref+'</div><div class="attn-desc">'+esc(t.title)+'</div></div>'+
@@ -1076,7 +1076,7 @@ function viewOverview(){
     '<select class="f" id="fStatus"><option value="">All statuses</option>'+STATUSES.map(function(s){return '<option '+(fStatus===s.name?'selected':'')+'>'+s.name+'</option>';}).join('')+'</select>'+
     '<select class="f" id="fClient"><option value="">All clients</option>'+clients.map(function(c){return '<option '+(fClient===c?'selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'+
     '<div style="flex:1"></div><button class="btn" id="csvBtn2"><i data-lucide="table"></i>Export CSV</button><button class="btn pri" id="newBtn2"><i data-lucide="plus"></i>New work</button></div>'+
-    (rows.length?'<div class="tbl-wrap"><table><thead><tr><th>WQ Ref</th><th>Client</th><th class="hide-sm">Site</th><th>Description</th><th class="hide-sm">Supplier</th><th>Value</th><th>Status</th><th class="hide-sm">Next action</th><th>Due</th><th>Updates</th><th></th></tr></thead><tbody>'+rows.map(rowHtml).join('')+'</tbody></table></div>':emptyState('clipboard-list','No works logged','Add your first WebQuote and it saves right here on this machine. No account, no subscription.','Add a work','newBtn2'));
+    (rows.length?'<div class="tbl-wrap"><table><thead><tr><th>Job Ref</th><th>Client</th><th class="hide-sm">Site</th><th>Description</th><th class="hide-sm">Supplier</th><th>Value</th><th>Status</th><th class="hide-sm">Next action</th><th>Due</th><th>Updates</th><th></th></tr></thead><tbody>'+rows.map(rowHtml).join('')+'</tbody></table></div>':emptyState('clipboard-list','No works logged','Add your first Job and it saves right here on this machine. No account, no subscription.','Add a work','newBtn2'));
 }
 function rowHtml(r){
   var m=statusMeta(r.status);
@@ -1306,7 +1306,7 @@ function gtdFilterbar(){
 function gtdTaskRow(t){
   var meta='';
   if(t.context) meta+='<span class="tk ctx">'+esc(t.context)+'</span>';
-  if(t.linkedWorkId){ var lw=workById(t.linkedWorkId); if(lw) meta+='<span class="tk job" data-openwork="'+lw.id+'"><i data-lucide="link"></i>'+esc(lw.wqRef||'WQ')+'</span>'; }
+  if(t.linkedWorkId){ var lw=workById(t.linkedWorkId); if(lw) meta+='<span class="tk job" data-openwork="'+lw.id+'"><i data-lucide="link"></i>'+esc(lw.wqRef||'Job')+'</span>'; }
   if(t.due){ var od=t.due<isoIn(0); meta+='<span class="tk due'+(od?' overdue':'')+'"><i data-lucide="calendar"></i>'+(od?'overdue ':'due ')+fmtDate(t.due)+'</span>'; }
   if(t.project&&gtd.view!=='projects') meta+='<span class="tk proj">'+esc(t.project)+'</span>';
   (t.tags||[]).forEach(function(tg){ meta+='<span class="tk hash">'+esc(tg)+'</span>'; });
@@ -1367,7 +1367,7 @@ function gtdOpenEditor(id){
   d.innerHTML='<div class="drawer-head"><span class="tag" style="background:var(--accent-soft);color:var(--green-deep);border-color:var(--green-line)" id="gtdBucketBadge">'+esc(GTD_LABEL[t.bucket]||'Inbox')+'</span><div><div class="ttl">Edit task</div></div><button class="icon-btn" id="gtdDrawerClose"><i data-lucide="x"></i></button></div>'+
     '<div class="drawer-body">'+
     '<div class="field"><label>Task</label><input id="gtdTitle" value="'+esc(t.title||'')+'"></div>'+
-    '<div class="grid-2"><div class="field"><label>Bucket</label><select id="gtdBucketSel">'+bucketOpts+'</select></div><div class="field"><label>Linked job (WQ)</label><select id="gtdLinked">'+worksOpts+'</select></div></div>'+
+    '<div class="grid-2"><div class="field"><label>Bucket</label><select id="gtdBucketSel">'+bucketOpts+'</select></div><div class="field"><label>Linked job</label><select id="gtdLinked">'+worksOpts+'</select></div></div>'+
     '<div class="grid-2"><div class="field"><label>Due date</label><input id="gtdDue" type="date" value="'+esc(t.due||'')+'"></div><div class="field"><label>Defer until (hide)</label><input id="gtdDefer" type="date" value="'+esc(t.defer||'')+'"></div></div>'+
     '<div class="grid-2" id="gtdWaitingField" style="display:'+(t.bucket==='waiting'?'grid':'none')+'"><div class="field"><label>Waiting on</label><input id="gtdWaiting" value="'+esc(t.waitingOn||'')+'" placeholder="Who / what?"></div><div class="field"><label>Chase date</label><input id="gtdChase" type="date" value="'+esc(t.chase||'')+'"></div></div>'+
     '<button type="button" class="disclosure'+(hasMore?' open':'')+'" id="gtdMoreToggle"><i data-lucide="chevron-down"></i><span>More details</span></button>'+
@@ -1509,7 +1509,7 @@ function exportBackup(){
 }
 function exportCSV(){
   try{
-    var cols=[['wqRef','WQ Ref'],['client','Client'],['site','Site'],['description','Description'],['supplier','Supplier'],['value','Value (£)'],['status','Status'],['stageOwner','Stage Owner'],['actionOwner','Action Owner'],['nextAction','Next Action'],['dueDate','Due Date'],['dateReceived','Date Received'],['summary','Summary']];
+    var cols=[['wqRef','Job Ref'],['client','Client'],['site','Site'],['description','Description'],['supplier','Supplier'],['value','Value (£)'],['status','Status'],['stageOwner','Stage Owner'],['actionOwner','Action Owner'],['nextAction','Next Action'],['dueDate','Due Date'],['dateReceived','Date Received'],['summary','Summary']];
     var qq=function(v){ v=(v==null?'':String(v)); return '"'+v.replace(/"/g,'""')+'"'; };
     var lines=[cols.map(function(c){return qq(c[1]);}).join(',')];
     DB.works.forEach(function(r){ lines.push(cols.map(function(c){return qq(r[c[0]]);}).join(',')); });
@@ -1534,7 +1534,7 @@ function openJob(id){
   var m=$('#jobModal');
   m.innerHTML='<div class="modal-head"><h2>'+(isNew?'New work':esc(r.wqRef||'Work'))+'</h2><button class="icon-btn" id="jobClose"><i data-lucide="x"></i></button></div>'+
     '<div class="modal-body">'+
-    '<div class="grid-2"><div class="field"><label>WQ Ref</label><input id="jWq" value="'+esc(r.wqRef||'')+'" placeholder="WQ-…"></div><div class="field"><label>Value (£)</label><input id="jVal" type="number" step="0.01" value="'+(r.value===''||r.value==null?'':r.value)+'"></div></div>'+
+    '<div class="grid-2"><div class="field"><label>Job Ref</label><input id="jWq" value="'+esc(r.wqRef||'')+'" placeholder="Job-…"></div><div class="field"><label>Value (£)</label><input id="jVal" type="number" step="0.01" value="'+(r.value===''||r.value==null?'':r.value)+'"></div></div>'+
     '<div class="grid-2"><div class="field"><label>Client</label><select id="jClient"></select></div><div class="field"><label>Site</label><select id="jSite"></select></div></div>'+
     '<div class="grid-2"><div class="field"><label>Supplier / SCP</label><select id="jSup"><option value="">— Select supplier —</option>'+DB.scps.map(function(s){return '<option '+(r.supplier===s.company?'selected':'')+'>'+esc(s.company)+'</option>';}).join('')+'</select></div><div class="field"><label>Status</label><select id="jStatus">'+STATUSES.map(function(s){return '<option '+(r.status===s.name?'selected':'')+'>'+s.name+'</option>';}).join('')+'</select></div></div>'+
     '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
