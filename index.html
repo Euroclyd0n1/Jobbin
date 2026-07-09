@@ -961,7 +961,7 @@ function refreshOverviewRow(id){
   icons();
 }
 var view='dashboard';
-var TITLES={dashboard:['Overview','Overview of your job register'],overview:['Job Board','Job register — click the Job ref to open a job, the speech bubble for updates'],tasks:['Tasks','GTD — capture, organise & track every action'],clients:['Clients','Client › regional manager › site › people'],internal:['Internal','Your internal colleagues'],scps:['Supply Chain','Partners, trades & performance'],settings:['Settings','Appearance, storage, Drive backup, trades, export']};
+var TITLES={dashboard:['Overview','Overview of your job register'],overview:['Job','Job register — click the Job ref to open a job, the speech bubble for updates'],tasks:['Tasks','GTD — capture, organise & track every action'],clients:['Clients','Client › regional manager › site › people'],internal:['Internal','Your internal colleagues'],scps:['Supply Chain','Partners, trades & performance'],settings:['Settings','Appearance, storage, Drive backup, trades, export']};
 function go(v){ view=v; $$('#nav button').forEach(function(b){ b.classList.toggle('on',b.dataset.view===v); }); var t=TITLES[v]||TITLES.dashboard; $('#ttl').textContent=t[0]; $('#sub').textContent=t[1]; render(); closeSide(); }
 function closeSide(){ var s=$('#side'); if(s)s.classList.remove('show'); }
 function overdueCount(){ var today=isoIn(0); return DB.works.filter(function(x){return x.dueDate&&x.dueDate<today&&CLOSED.indexOf(x.status)<0;}).length; }
@@ -993,17 +993,27 @@ function viewDashboard(){
   var totalVal=w.reduce(function(a,x){return a+(+x.value||0);},0);
   var openVal=open.reduce(function(a,x){return a+(+x.value||0);},0);
   var today=isoIn(0), wkEnd=isoIn(7);
-  var overdue=w.filter(function(x){return x.dueDate&&x.dueDate<today&&CLOSED.indexOf(x.status)<0;}).length;
-  var clientList=w.map(function(x){return x.client;}).filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;});
-  var items=[];
-  w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&CLOSED.indexOf(x.status)<0){ items.push({kind:'job',date:x.dueDate,over:x.dueDate<today,job:x}); } });
-  DB.tasks.forEach(function(t){
-    if(t.done||isDeferred(t))return;
-    var date = t.due || (t.bucket==='waiting'?t.chase:'');
-    if(!date||date>wkEnd)return;
-    items.push({kind:'task',date:date,over:date<today,task:t,chase:(t.bucket==='waiting'&&!t.due)});
-  });
-  items.sort(function(a,b){ return a.date<b.date?-1:(a.date>b.date?1:0); });
+  var  clientList=w.map(function(x){return  x.client;}).filter(Boolean).filter(function(v,i,a){return  a.indexOf(v)===i;});
+
+var  items=[];
+
+w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&CLOSED.indexOf(x.status)<0){ items.push({kind:'job',date:x.dueDate,over:x.dueDate<today,job:x}); } });
+
+DB.tasks.forEach(function(t){
+
+if(t.done||isDeferred(t))return;
+
+var  date  =  t.due || (t.bucket==='waiting'?t.chase:'');
+
+if(!date||date>wkEnd)return;
+
+items.push({kind:'task',date:date,over:date<today,task:t,chase:(t.bucket==='waiting'&&!t.due)});
+
+});
+
+items.sort(function(a,b){ return  a.date<b.date?-1:(a.date>b.date?1:0); });
+
+var  overdue=items.filter(function(it){return  it.over;}).length;
   var anyOver=items.some(function(it){return it.over;});
   var attnHtml='';
   if(items.length){
