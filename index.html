@@ -1755,7 +1755,7 @@ function wireChrome(){
 function afterLoad(){
   applyTheme();
   try{ if(driveCfg().clientId) driveInitClient(); }catch(e){}
-  render();
+    go(view);
   icons();
   calcFileBytes().then(function(){ return migrateLegacyAttachments(); }).then(function(){ var sm=$('#storageMeterWrap'); if(sm)renderStorageMeter(sm); }).catch(function(){});
   driveScheduleStart();
