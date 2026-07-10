@@ -85,10 +85,10 @@ if (foot) { foot.appendChild(credit); } else { document.body.appendChild(credit)
 <!-- /skill:libraries --><!--<base href=".">--><base href="."><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <script src="./client" async="" defer="" data-activated="true"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<title>Jobbin · v31.1</title>
+<title>Jobbin · v31.2</title>
 <style>
 /* ============================================================
-   Jobbin — v31.1
+   Jobbin — v31.2
    Base: v31. One change:
      - Auto-backup control (toggle + interval + countdown) now
        renders ALWAYS in the Drive panel, disabled until you
@@ -744,7 +744,7 @@ function toast(msg){ var w=$('#toasts'); if(!w)return; var t=document.createElem
    Google Drive backup
    One JSON snapshot of the register in a private Drive
    appDataFolder. Buttons: "Back up now" / "Restore". Auto-backup
-   toggle + interval + live countdown. v31.1: the auto-backup
+   toggle + interval + live countdown. 2: the auto-backup
    control renders always (disabled until connected).
    ============================================================ */
 var DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata';
@@ -858,7 +858,7 @@ function drivePanelHtml(){
         ? '<button class="btn pri" id="driveBackupNow"><i data-lucide="cloud-upload"></i>Back up now</button><button class="btn" id="driveRestoreBtn"><i data-lucide="cloud-download"></i>Restore</button><button class="btn danger" id="driveDisconnect"><i data-lucide="log-out"></i>Disconnect</button>'
         : '<button class="btn pri" id="driveConnect"><i data-lucide="cloud"></i>Connect</button>')+
     '</div>'+
-    /* v31.1: auto-backup row ALWAYS shown; disabled until connected */
+    /* v31.2: auto-backup row ALWAYS shown; disabled until connected */
     '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line-soft)">'+
       '<label style="display:inline-flex;align-items:center;gap:8px;font-size:0.86rem;font-weight:600;color:'+(connected?'var(--ink-2)':'var(--ink-3)')+';cursor:'+(connected?'pointer':'not-allowed')+'"><input type="checkbox" id="driveAuto" '+(cfg.auto?'checked':'')+' '+(connected?'':'disabled')+'>Automatic backup</label>'+
       '<select class="f" id="driveInterval" '+((connected&&cfg.auto)?'':'disabled')+'>'+intervals.map(function(o){return '<option value="'+o[0]+'" '+((''+(cfg.interval||0))===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
