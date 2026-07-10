@@ -6,17 +6,15 @@
 <style>
 /* Credit line — bottom-right */
 .design-ui-credit {
-  position: fixed;
-  bottom: 12px;
-  right: 12px;
+  margin-left: auto;
   font: 11px/1 system-ui, sans-serif;
-  color: rgba(128,128,128,0.5);
-  pointer-events: none;
-  z-index: 2147483647;
-  transition: opacity 0.4s ease;
+  color: rgba(128,128,128,0.6);
   user-select: none;
   letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
 }
+
 
 /* Hide chrome on touch devices */
 @media (hover: none) {
@@ -45,27 +43,21 @@
         document.body.classList.add('artifact-editable');
     }
 
-    // Credit badge with idle-fade. Hover devices only.
     function initChromeUI() {
-        if (!matchMedia('(hover: hover)').matches) return;
 
-        var credit = document.createElement('div');
-        credit.className = 'design-ui-credit';
-        credit.setAttribute('aria-hidden', 'true');
-        credit.innerHTML = '\u{1F4CC} by D\'ebon-Heir';
-        document.body.appendChild(credit);
+var  credit  =  document.createElement('div');
 
-        var timer = null;
-        var fade = function (out) { credit.style.opacity = out ? '0' : ''; };
-        fade(true);
-        var show = function () {
-            fade(false);
-            clearTimeout(timer);
-            timer = setTimeout(function () { fade(true); }, 3000);
-        };
-        document.addEventListener('mousemove', show);
-        show();
-    }
+credit.className  =  'design-ui-credit';
+
+credit.setAttribute('aria-hidden', 'true');
+
+credit.innerHTML  =  '<svg width="11" height="11" viewBox="0 0 64 64" style="vertical-align:middle;margin-right:3px"><path d="M32 27.5 L34.4 29.2 L32.9 55 L32 60 L31.1 55 L29.6 29.2 Z" fill="#235C3B"/><circle cx="32" cy="18" r="12.5" fill="#E01E26"/><circle cx="36.2" cy="13.8" r="3.4" fill="#ffffff" opacity="0.35"/></svg>by D\'ebon-Heir';
+
+var  foot  =  document.querySelector('.side-foot');
+
+if (foot) { foot.appendChild(credit); } else { document.body.appendChild(credit); }
+
+}
 
     function init() {
         markEditable();
@@ -961,7 +953,7 @@ function refreshOverviewRow(id){
   icons();
 }
 var view='dashboard';
-var TITLES={dashboard:['Overview','Overview of your job register'],overview:['Job','Job register — click the Job ref to open a job, the speech bubble for updates'],tasks:['Tasks','GTD — capture, organise & track every action'],clients:['Clients','Client › regional manager › site › people'],internal:['Internal','Your internal colleagues'],scps:['Supply Chain','Partners, trades & performance'],settings:['Settings','Appearance, storage, Drive backup, trades, export']};
+var TITLES={dashboard:['Overview','Overview of your job register'],overview:['Job Board','Job register — click the Job ref to open a job, the speech bubble for updates'],tasks:['Tasks','GTD — capture, organise & track every action'],clients:['Clients','Client › regional manager › site › people'],internal:['Internal','Your internal colleagues'],scps:['Supply Chain','Partners, trades & performance'],settings:['Settings','Appearance, storage, Drive backup, trades, export']};
 function go(v){ view=v; $$('#nav button').forEach(function(b){ b.classList.toggle('on',b.dataset.view===v); }); var t=TITLES[v]||TITLES.dashboard; $('#ttl').textContent=t[0]; $('#sub').textContent=t[1]; render(); closeSide(); }
 function closeSide(){ var s=$('#side'); if(s)s.classList.remove('show'); }
 function overdueCount(){ var today=isoIn(0); return DB.works.filter(function(x){return x.dueDate&&x.dueDate<today&&CLOSED.indexOf(x.status)<0;}).length; }
