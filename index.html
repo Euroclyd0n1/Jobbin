@@ -405,12 +405,15 @@ td.edit:hover{ box-shadow:inset 0 0 0 1px var(--line); border-radius:5px; }
 .trade-rank .stars{ display:inline-flex; gap:1px; }
 .trade-rank .stars i,
 .trade-rank .stars svg{
-  width:12px;
-  height:12px;
+  width:17px;
+  height:17px;
   color:var(--line);
   stroke-width:1.5;
 }
 
+.trade-rank .stars [data-rate]:hover{
+  transform:scale(1.25);
+}
 .trade-rank .stars i.on,
 .trade-rank .stars svg.on{
   color:var(--amber);
