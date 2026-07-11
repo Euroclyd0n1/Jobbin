@@ -403,8 +403,20 @@ td.edit:hover{ box-shadow:inset 0 0 0 1px var(--line); border-radius:5px; }
 .trade-rank{ display:flex; align-items:center; gap:8px; padding:5px 0; }
 .trade-rank .tname{ font-size:0.82rem; flex:1 1 auto; }
 .trade-rank .stars{ display:inline-flex; gap:1px; }
-.trade-rank .stars i{ width:14px; height:14px; color:var(--line); }
-.trade-rank .stars i.on{ color:var(--amber); fill:var(--amber); }
+.trade-rank .stars i,
+.trade-rank .stars svg{
+  width:12px;
+  height:12px;
+  color:var(--line);
+  stroke-width:1.5;
+}
+
+.trade-rank .stars i.on,
+.trade-rank .stars svg.on{
+  color:var(--amber);
+  fill:var(--amber);
+}
+
 .trm{ width:22px; height:22px; border-radius:6px; display:inline-grid; place-items:center; color:var(--ink-3); }
 .trm:hover{ background:var(--red-soft); color:var(--red); }
 .trm i{ width:13px; height:13px; }
@@ -415,9 +427,25 @@ td.edit:hover{ box-shadow:inset 0 0 0 1px var(--line); border-radius:5px; }
 .trade-edit-row select{ flex:1 1 auto; padding:8px 10px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--paper); outline:none; }
 .trade-edit-row select:focus{ border-color:var(--green-line); box-shadow:0 0 0 3px var(--green-soft); }
 .stars-edit{ display:inline-flex; gap:3px; flex:0 0 auto; }
-.stars-edit i{ width:18px; height:18px; color:var(--line); cursor:pointer; transition:color .1s, transform .08s; }
-.stars-edit i:hover{ transform:scale(1.15); }
-.stars-edit i.on{ color:var(--amber); fill:var(--amber); }
+.stars-edit i,
+.stars-edit svg{
+  width:18px;
+  height:18px;
+  color:var(--line);
+  cursor:pointer;
+  transition:color .1s, transform .08s;
+}
+
+.stars-edit i:hover,
+.stars-edit svg:hover{
+  transform:scale(1.25);
+}
+
+.stars-edit i.on,
+.stars-edit svg.on{
+  color:var(--amber);
+  fill:var(--amber);
+}
 .tchip{ display:inline-flex; align-items:center; gap:7px; font-size:0.78rem; padding:5px 11px; border-radius:20px; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2); }
 .tchip button{ display:inline-flex; color:var(--ink-3); }
 .tchip button:hover{ color:var(--red); }
@@ -1233,12 +1261,14 @@ function viewScps(){
 }
 function scpCard(s){
   var st=scpStatsFor(s.company);
-  var top=s.trades.slice().sort(function(a,b){return b.rating-a.rating;});
+  var top=s.trades.slice().sort(function(a,b){
+  return a.trade.localeCompare(b.trade);
+});
   var avail=DB.trades.filter(function(t){return !s.trades.some(function(x){return x.trade===t;});});
   var people=s.people||[];
   var tradesOpen=!!openSet[s.id+':trades'];
   var peopleOpen=!!openSet[s.id+':people'];
-  var tradesBody=(top.length?top.map(function(t){return '<div class="trade-rank"><span class="tname">'+esc(t.trade)+'</span><span class="stars">'+[1,2,3,4,5].map(function(n){return '<i data-lucide="star" class="'+(n<=t.rating?'on':'')+'"></i>';}).join('')+'</span><button class="trm" data-rmtrade="'+s.id+'|'+esc(t.trade)+'" title="Remove trade"><i data-lucide="x"></i></button></div>';}).join(''):'<span style="font-size:12px;color:var(--ink-3)">No trades ranked yet</span>')+
+  var tradesBody=(top.length?top.map(function(t){return '<div class="trade-rank"><span class="tname">'+esc(t.trade)+'</span><span class="stars">'+[1,2,3,4,5].map(function(n){return '<i data-lucide="star" class="'+(n<=t.rating?'on':'')+'" data-rate="'+s.id+'|'+encodeURIComponent(t.trade)+'|'+n+'" title="Set '+n+' star rating"></i>';}).join('')+'</span><button class="trm" data-rmtrade="'+s.id+'|'+esc(t.trade)+'" title="Remove trade"><i data-lucide="x"></i></button></div>';}).join(''):'<span style="font-size:12px;color:var(--ink-3)">No trades ranked yet</span>')+
     (avail.length?'<div class="trade-add-row"><select data-addtrade="'+s.id+'"><option value="">+ Add trade…</option>'+avail.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select></div>':'<div style="font-size:11px;color:var(--ink-3);margin-top:8px">All master trades added. Manage the list in Settings.</div>');
   var peopleBody=(people.length?people.map(function(p){return '<div class="scp-person" data-pid="'+p.id+'"><div class="sp-main"><span class="sp-name">'+esc(p.name)+'</span>'+([p.role,p.email,p.phone].filter(Boolean).length?'<span class="sp-sub">'+[p.role,p.email,p.phone].filter(Boolean).map(esc).join(' · ')+'</span>':'')+'</div><span class="acts"><button class="icon-btn" data-editscpperson="'+s.id+'|'+p.id+'" title="Edit person"><i data-lucide="pen-line"></i></button><button class="trm" data-rmscpperson="'+s.id+'|'+p.id+'" title="Remove person"><i data-lucide="x"></i></button></span></div>';}).join(''):'<div style="font-size:12px;color:var(--ink-3);padding:4px 8px">No people yet.</div>')+
     '<button class="addrow" data-addscpperson="'+s.id+'"><i data-lucide="user-plus"></i>Add person</button>';
@@ -1510,7 +1540,33 @@ function bindView(){
       var sg=e.target.closest('#segScp [data-v]'); if(sg){ viScp=sg.dataset.v; render(); return; }
       var cg=e.target.closest('#colsScp [data-c]'); if(cg){ scpCols=+cg.dataset.c; render(); return; }
       var b;
-      if((b=e.target.closest('[data-editscp]'))){ editScp(cardIdOf(e.target)); return; }
+
+if((b=e.target.closest('[data-rate]'))){
+  e.stopPropagation();
+
+  var ratingParts=b.getAttribute('data-rate').split('|');
+  var ratingScp=scpById(ratingParts[0]);
+  var ratingTrade=decodeURIComponent(ratingParts[1]);
+  var ratingValue=+ratingParts[2];
+
+  if(ratingScp){
+    var tradeRating=ratingScp.trades.find(function(t){
+      return t.trade===ratingTrade;
+    });
+
+    if(tradeRating){
+      tradeRating.rating=ratingValue;
+      save();
+      render();
+      toast(ratingTrade+' rating updated');
+    }
+  }
+
+  return;
+}
+
+if((b=e.target.closest('[data-editscp]'))){
+ editScp(cardIdOf(e.target)); return; }
       if((b=e.target.closest('[data-delscp]'))){ var id=cardIdOf(e.target),s=scpById(id); confirmDel('Delete SCP?',s.company+' will be removed.',function(){ DB.scps=DB.scps.filter(function(x){return x.id!==id;}); save(); render(); toast('SCP deleted'); }); return; }
       if((b=e.target.closest('[data-rmtrade]'))){ var p=b.getAttribute('data-rmtrade').split('|'),sp=scpById(p[0]); confirmDel('Remove trade?','“'+p[1]+'” will be removed from '+sp.company+'.',function(){ sp.trades=sp.trades.filter(function(t){return t.trade!==p[1];}); save(); render(); toast('Trade removed'); }); return; }
       if((b=e.target.closest('[data-editscpperson]'))){ var pe=b.getAttribute('data-editscpperson').split('|'); editScpPerson(pe[0],pe[1]); return; }
@@ -1759,10 +1815,34 @@ function editScp(id){
   openScrimModal('addScrim','addModal'); icons();
   function close(){ closeScrimModal('addScrim','addModal'); m.classList.add('sm'); m.style.width=''; }
   function bindTradeRows(){
-    icons();
-    $$('#tradeRows [data-rmtrade]').forEach(function(b){ b.addEventListener('click',function(){ b.closest('.trade-edit-row').remove(); }); });
-    $$('#tradeRows .stars-edit i').forEach(function(st){ st.addEventListener('click',function(){ var row=st.closest('.trade-edit-row'); var n=+st.getAttribute('data-star'); row.dataset.rating=n; $$('.stars-edit i',row).forEach(function(x){ x.classList.toggle('on',(+x.getAttribute('data-star'))<=n); }); }); });
-  }
+  icons();
+
+  $$('#tradeRows [data-rmtrade]').forEach(function(b){
+    b.addEventListener('click',function(){
+      b.closest('.trade-edit-row').remove();
+    });
+  });
+
+  $$('#tradeRows .stars-edit').forEach(function(stars){
+    stars.addEventListener('click',function(e){
+      var star=e.target.closest('[data-star]');
+      if(!star)return;
+
+      var row=stars.closest('.trade-edit-row');
+      var rating=+star.getAttribute('data-star');
+
+      row.dataset.rating=rating;
+
+      $$('[data-star]',stars).forEach(function(x){
+        x.classList.toggle(
+          'on',
+          +x.getAttribute('data-star')<=rating
+        );
+      });
+    });
+  });
+}
+
   function bindPeople(){
     $$('#scpPeople [data-rmperson]').forEach(function(b){ b.addEventListener('click',function(){ tmpPeople.splice(+b.getAttribute('data-rmperson'),1); $('#scpPeople').innerHTML=peopleHtml(); icons(); bindPeople(); }); });
   }
