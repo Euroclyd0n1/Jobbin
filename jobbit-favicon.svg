@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Jobbit pin">
+  <title>Jobbit</title>
+  <!-- tapered green shaft -->
+  <path d="M32 27.5 L34.4 29.2 L32.9 55 L32 60 L31.1 55 L29.6 29.2 Z" fill="#235C3B"/>
+  <!-- red pin head -->
+  <circle cx="32" cy="18" r="12.5" fill="#E01E26"/>
+  <!-- soft highlight -->
+  <circle cx="36.2" cy="13.8" r="3.4" fill="#ffffff" opacity="0.35"/>
+</svg>
