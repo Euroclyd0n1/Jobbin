@@ -293,6 +293,129 @@ select.f:disabled{ opacity:.5; cursor:not-allowed; }
 .tbl-wrap{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden; box-shadow:var(--shadow-sm); }
 table{ width:100%; border-collapse:collapse; }
 thead th{ text-align:left; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-3); padding:11px 13px; border-bottom:1px solid var(--line); background:var(--surface-2); white-space:nowrap; }
+.board-head{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  width:100%;
+  color:inherit;
+  font:inherit;
+  font-weight:inherit;
+  text-transform:inherit;
+  letter-spacing:inherit;
+  white-space:nowrap;
+}
+
+.board-head i,
+.board-head svg{
+  width:13px;
+  height:13px;
+  color:var(--ink-3);
+  flex:0 0 auto;
+}
+
+.board-head:hover{
+  color:var(--ink);
+}
+
+.board-head.active{
+  color:var(--green-deep);
+}
+
+.board-head.active i,
+.board-head.active svg{
+  color:var(--accent);
+}
+.board-head-wrap{
+  display:flex;
+  align-items:center;
+  gap:2px;
+}
+
+.board-filter-btn{
+  display:grid;
+  place-items:center;
+  width:22px;
+  height:22px;
+  border-radius:5px;
+  color:var(--ink-3);
+  flex:0 0 auto;
+}
+
+.board-filter-btn:hover{
+  background:var(--surface);
+  color:var(--ink);
+}
+
+.board-filter-btn i,
+.board-filter-btn svg{
+  width:12px;
+  height:12px;
+}
+
+.board-filter-btn.active{
+  background:var(--accent-soft);
+  color:var(--accent);
+}
+.board-filter-menu{
+  position:fixed;
+  z-index:90;
+  width:270px;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r-md);
+  box-shadow:var(--shadow-md);
+}
+
+.board-filter-menu h4{
+  margin:0 0 12px;
+  font-size:0.85rem;
+  font-weight:650;
+  text-transform:none;
+  letter-spacing:0;
+}
+
+.board-filter-fields{
+  display:grid;
+  gap:10px;
+}
+
+.board-filter-fields label{
+  display:grid;
+  gap:5px;
+  font-size:0.72rem;
+  font-weight:650;
+  color:var(--ink-3);
+}
+
+.board-filter-fields input,
+.board-filter-fields select{
+  width:100%;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius:var(--r-sm);
+  background:var(--paper);
+  color:var(--ink);
+  outline:none;
+}
+
+.board-filter-fields input:focus,
+.board-filter-fields select:focus{
+  border-color:var(--green-line);
+  box-shadow:0 0 0 3px var(--green-soft);
+}
+
+.board-filter-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:14px;
+}
+
+.board-filter-actions .spacer{
+  flex:1;
+}
 tbody td{ padding:11px 13px; border-bottom:1px solid var(--line-soft); font-size:0.86rem; vertical-align:middle; }
 tbody tr:last-child td{ border-bottom:none; }
 tbody tr:hover{ background:var(--surface-2); }
@@ -1063,6 +1186,19 @@ var boardFilters={
   hideCompleted:false
 };
 
+var BOARD_FIELD_TYPES={
+  wqRef:'text',
+  client:'choice',
+  site:'choice',
+  description:'text',
+  supplier:'choice',
+  value:'number',
+  status:'choice',
+  nextAction:'text',
+  dueDate:'date'
+};
+
+
 function viewDashboard(){
   var w=DB.works;
   var open=w.filter(function(x){return CLOSED.indexOf(x.status)<0;});
@@ -1151,44 +1287,71 @@ function filteredRows(){
   var rows=DB.works.slice();
   var searchText=q.trim().toLowerCase();
 
-  /* Hide completed unless the user is actively searching */
   if(boardFilters.hideCompleted && !searchText){
-    rows=rows.filter(function(r){
-      return CLOSED.indexOf(r.status)<0;
+    rows=rows.filter(function(row){
+      return CLOSED.indexOf(row.status)<0;
     });
   }
 
-  /* Existing filters */
-  if(fStatus){
-    rows=rows.filter(function(r){
-      return r.status===fStatus;
-    });
-  }
+  Object.keys(boardFilters.values).forEach(function(field){
+    var filter=boardFilters.values[field];
 
-  if(fClient){
-    rows=rows.filter(function(r){
-      return r.client===fClient;
-    });
-  }
+    if(!filter)return;
 
-  /* Global search includes completed matches */
+    rows=rows.filter(function(row){
+      var value=row[field];
+
+      if(filter.type==='text'){
+        return String(value||'')
+          .toLowerCase()
+          .indexOf(filter.query.toLowerCase())>=0;
+      }
+
+      if(filter.type==='choice'){
+        return String(value||'')===filter.value;
+      }
+
+      if(filter.type==='number'){
+        var numberValue=Number(value);
+
+        if(Number.isNaN(numberValue))return false;
+        if(filter.min!=='' && numberValue<Number(filter.min))return false;
+        if(filter.max!=='' && numberValue>Number(filter.max))return false;
+
+        return true;
+      }
+
+      if(filter.type==='date'){
+        var dateValue=String(value||'');
+
+        if(!dateValue)return false;
+        if(filter.from && dateValue<filter.from)return false;
+        if(filter.to && dateValue>filter.to)return false;
+
+        return true;
+      }
+
+      return true;
+    });
+  });
+
   if(searchText){
-
-    rows=rows.filter(function(r){
+    rows=rows.filter(function(row){
       return [
-        r.wqRef,
-        r.client,
-        r.site,
-        r.description,
-        r.supplier,
-        r.nextAction
+        row.wqRef,
+        row.client,
+        row.site,
+        row.description,
+        row.supplier,
+        row.nextAction
       ].some(function(value){
-        return (value||'').toLowerCase().indexOf(searchText)>=0;
+        return String(value||'')
+          .toLowerCase()
+          .indexOf(searchText)>=0;
       });
     });
   }
 
-  /* Column sorting */
   if(boardFilters.sortField && boardFilters.sortDirection){
     var field=boardFilters.sortField;
     var direction=boardFilters.sortDirection==='asc' ? 1 : -1;
@@ -1196,43 +1359,334 @@ function filteredRows(){
     rows.sort(function(a,b){
       var av=a[field];
       var bv=b[field];
-
       var aEmpty=av==null || av==='';
-var bEmpty=bv==null || bv==='';
+      var bEmpty=bv==null || bv==='';
 
-if(aEmpty && bEmpty)return 0;
-if(aEmpty)return 1;
-if(bEmpty)return -1;
-
+      if(aEmpty && bEmpty)return 0;
+      if(aEmpty)return 1;
+      if(bEmpty)return -1;
 
       if(field==='value'){
-        return ((+av)-(+bv))*direction;
+        return (Number(av)-Number(bv))*direction;
       }
 
       return String(av).localeCompare(
         String(bv),
         undefined,
-        {numeric:true,sensitivity:'base'}
+        {
+          numeric:true,
+          sensitivity:'base'
+        }
       )*direction;
     });
   }
 
   return rows;
 }
-function boardHeader(field,label){
-  var active=boardFilters.sortField===field;
-  var icon='chevrons-up-down';
+function hasBoardFilter(field){
+  return !!boardFilters.values[field];
+}
 
-  if(active){
-    icon=boardFilters.sortDirection==='asc'
+function hasBoardState(){
+  return !!(
+    boardFilters.sortField ||
+    Object.keys(boardFilters.values).length ||
+    boardFilters.hideCompleted ||
+    q.trim()
+  );
+}
+
+function clearBoardState(){
+  boardFilters.sortField='';
+  boardFilters.sortDirection='';
+  boardFilters.values={};
+  boardFilters.hideCompleted=false;
+  fStatus='';
+  fClient='';
+  q='';
+}
+
+function boardHeader(field,label){
+  var activeSort=boardFilters.sortField===field;
+  var activeFilter=hasBoardFilter(field);
+  var sortIcon='chevrons-up-down';
+
+  if(activeSort){
+    sortIcon=boardFilters.sortDirection==='asc'
       ? 'arrow-up'
       : 'arrow-down';
   }
 
-  return '<button class="board-head'+(active?' active':'')+'" data-board-sort="'+field+'">'+
-    '<span>'+label+'</span>'+
-    '<i data-lucide="'+icon+'"></i>'+
-  '</button>';
+  return '<div class="board-head-wrap">'+
+    '<button class="board-head'+
+      (activeSort?' active':'')+
+      '" data-board-sort="'+field+'">'+
+      '<span>'+label+'</span>'+
+      '<i data-lucide="'+sortIcon+'"></i>'+
+    '</button>'+
+
+    '<button class="board-filter-btn'+
+      (activeFilter?' active':'')+
+      '" data-board-filter="'+field+
+      '" data-board-label="'+label+
+      '" aria-label="Filter '+label+
+      '" title="Filter '+label+'">'+
+      '<i data-lucide="filter"></i>'+
+    '</button>'+
+  '</div>';
+}
+
+var activeBoardFilterMenu=null;
+var boardFilterOutsideHandler=null;
+
+function closeBoardFilterMenu(){
+  if(activeBoardFilterMenu){
+    activeBoardFilterMenu.remove();
+    activeBoardFilterMenu=null;
+  }
+
+  if(boardFilterOutsideHandler){
+    document.removeEventListener(
+      'mousedown',
+      boardFilterOutsideHandler,
+      true
+    );
+
+    boardFilterOutsideHandler=null;
+  }
+}
+
+function boardChoiceOptions(field){
+  return DB.works
+    .map(function(row){
+      return row[field];
+    })
+    .filter(Boolean)
+    .filter(function(value,index,array){
+      return array.indexOf(value)===index;
+    })
+    .sort(function(a,b){
+      return String(a).localeCompare(
+        String(b),
+        undefined,
+        {numeric:true,sensitivity:'base'}
+      );
+    });
+}
+
+function openBoardFilterMenu(button,field,label){
+  closeBoardFilterMenu();
+
+  var type=BOARD_FIELD_TYPES[field]||'text';
+  var current=boardFilters.values[field]||{};
+  var fieldsHtml='';
+
+  if(type==='text'){
+    fieldsHtml=
+      '<label>Contains'+
+        '<input id="boardFilterText" value="'+
+          esc(current.query||'')+
+        '" placeholder="Type to filter…">'+
+      '</label>';
+  }
+
+  if(type==='choice'){
+    fieldsHtml=
+      '<label>Show only'+
+        '<select id="boardFilterChoice">'+
+          '<option value="">All values</option>'+
+          boardChoiceOptions(field).map(function(value){
+            return '<option value="'+esc(value)+'" '+
+              (current.value===value?'selected':'')+
+            '>'+esc(value)+'</option>';
+          }).join('')+
+        '</select>'+
+      '</label>';
+  }
+
+  if(type==='number'){
+    fieldsHtml=
+      '<label>Minimum'+
+        '<input id="boardFilterMin" type="number" value="'+
+          esc(current.min==null?'':current.min)+
+        '">'+
+      '</label>'+
+      '<label>Maximum'+
+        '<input id="boardFilterMax" type="number" value="'+
+          esc(current.max==null?'':current.max)+
+        '">'+
+      '</label>';
+  }
+
+  if(type==='date'){
+    fieldsHtml=
+      '<label>From'+
+        '<input id="boardFilterFrom" type="date" value="'+
+          esc(current.from||'')+
+        '">'+
+      '</label>'+
+      '<label>To'+
+        '<input id="boardFilterTo" type="date" value="'+
+          esc(current.to||'')+
+        '">'+
+      '</label>';
+  }
+
+  var menu=document.createElement('div');
+  menu.className='board-filter-menu';
+
+  menu.innerHTML=
+    '<h4>Filter '+esc(label)+'</h4>'+
+    '<div class="board-filter-fields">'+fieldsHtml+'</div>'+
+    '<div class="board-filter-actions">'+
+      '<button class="btn sm" id="boardFilterClear">Clear</button>'+
+      '<span class="spacer"></span>'+
+      '<button class="btn sm" id="boardFilterCancel">Cancel</button>'+
+      '<button class="btn pri sm" id="boardFilterApply">Apply</button>'+
+    '</div>';
+
+  document.body.appendChild(menu);
+  activeBoardFilterMenu=menu;
+
+  var rect=button.getBoundingClientRect();
+  var left=Math.min(
+    rect.left,
+    window.innerWidth-menu.offsetWidth-10
+  );
+
+  var top=rect.bottom+6;
+
+  if(top+menu.offsetHeight>window.innerHeight-10){
+    top=Math.max(10,rect.top-menu.offsetHeight-6);
+  }
+
+  menu.style.left=Math.max(10,left)+'px';
+  menu.style.top=top+'px';
+
+  icons();
+
+  var firstInput=menu.querySelector('input,select');
+
+  if(firstInput){
+    firstInput.focus();
+  }
+
+  menu.querySelector('#boardFilterCancel')
+    .addEventListener('click',closeBoardFilterMenu);
+
+  menu.querySelector('#boardFilterClear')
+    .addEventListener('click',function(){
+      delete boardFilters.values[field];
+      closeBoardFilterMenu();
+      render();
+    });
+
+  menu.querySelector('#boardFilterApply')
+    .addEventListener('click',function(){
+      if(type==='text'){
+        var query=menu
+          .querySelector('#boardFilterText')
+          .value
+          .trim();
+
+        if(query){
+          boardFilters.values[field]={
+            type:'text',
+            query:query
+          };
+        }else{
+          delete boardFilters.values[field];
+        }
+      }
+
+      if(type==='choice'){
+        var choice=menu
+          .querySelector('#boardFilterChoice')
+          .value;
+
+        if(choice){
+          boardFilters.values[field]={
+            type:'choice',
+            value:choice
+          };
+        }else{
+          delete boardFilters.values[field];
+        }
+      }
+
+      if(type==='number'){
+        var min=menu
+          .querySelector('#boardFilterMin')
+          .value;
+
+        var max=menu
+          .querySelector('#boardFilterMax')
+          .value;
+
+        if(min!=='' || max!==''){
+          boardFilters.values[field]={
+            type:'number',
+            min:min,
+            max:max
+          };
+        }else{
+          delete boardFilters.values[field];
+        }
+      }
+
+      if(type==='date'){
+        var from=menu
+          .querySelector('#boardFilterFrom')
+          .value;
+
+        var to=menu
+          .querySelector('#boardFilterTo')
+          .value;
+
+        if(from || to){
+          boardFilters.values[field]={
+            type:'date',
+            from:from,
+            to:to
+          };
+        }else{
+          delete boardFilters.values[field];
+        }
+      }
+
+      closeBoardFilterMenu();
+      render();
+    });
+
+  menu.addEventListener('keydown',function(event){
+    if(event.key==='Escape'){
+      event.preventDefault();
+      closeBoardFilterMenu();
+    }
+
+    if(event.key==='Enter'){
+      event.preventDefault();
+      menu.querySelector('#boardFilterApply').click();
+    }
+  });
+
+  setTimeout(function(){
+    boardFilterOutsideHandler=function(event){
+      if(
+        activeBoardFilterMenu &&
+        !activeBoardFilterMenu.contains(event.target) &&
+        !event.target.closest('[data-board-filter]')
+      ){
+        closeBoardFilterMenu();
+      }
+    };
+
+    document.addEventListener(
+      'mousedown',
+      boardFilterOutsideHandler,
+      true
+    );
+  },0);
 }
 function viewOverview(){
   var clients=DB.works
@@ -1253,24 +1707,6 @@ function viewOverview(){
       '<input id="q" placeholder="Search works…" value="'+esc(q)+'">'+
     '</div>'+
 
-    '<select class="f" id="fStatus">'+
-      '<option value="">All statuses</option>'+
-      STATUSES.map(function(status){
-        return '<option '+(fStatus===status.name?'selected':'')+'>'+
-          status.name+
-        '</option>';
-      }).join('')+
-    '</select>'+
-
-    '<select class="f" id="fClient">'+
-      '<option value="">All clients</option>'+
-      clients.map(function(client){
-        return '<option '+(fClient===client?'selected':'')+'>'+
-          esc(client)+
-        '</option>';
-      }).join('')+
-    '</select>'+
-
     '<button class="btn" id="toggleCompleted" title="'+
       (boardFilters.hideCompleted?'Show completed jobs':'Hide completed jobs')+
     '">'+
@@ -1278,7 +1714,15 @@ function viewOverview(){
         (boardFilters.hideCompleted?'eye':'eye-off')+
       '"></i>'+
     '</button>'+
-
+    (
+  hasBoardState()
+    ? '<button class="btn" id="clearBoardFilters" '+
+        'aria-label="Clear all filters" '+
+        'title="Clear all filters">'+
+        '<i data-lucide="list-filter-plus"></i>'+
+      '</button>'
+    : ''
+)+
     '<div style="flex:1"></div>'+
 
     '<button class="btn" id="csvBtn2">'+
@@ -1655,6 +2099,24 @@ function bindView(){
   } else if(view==='overview'){
     c.onclick=function(e){
       var sortButton=e.target.closest('[data-board-sort]');
+      if(e.target.closest('#clearBoardFilters')){
+  closeBoardFilterMenu();
+  clearBoardState();
+  render();
+  return;
+}
+
+var filterButton=e.target.closest('[data-board-filter]');
+
+if(filterButton){
+  openBoardFilterMenu(
+    filterButton,
+    filterButton.getAttribute('data-board-filter'),
+    filterButton.getAttribute('data-board-label')
+  );
+
+  return;
+}
 
 if(sortButton){
   var sortField=sortButton.getAttribute('data-board-sort');
