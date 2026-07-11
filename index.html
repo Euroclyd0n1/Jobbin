@@ -85,10 +85,10 @@ if (foot) { foot.appendChild(credit); } else { document.body.appendChild(credit)
 <!-- /skill:libraries --><!--<base href=".">--><base href="."><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <script src="./client" async="" defer="" data-activated="true"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<title>Jobbin · v31.2</title>
+<title>Jobbin · v31.3</title>
 <style>
 /* ============================================================
-   Jobbin — v31.2
+   Jobbin — v31.3
    Base: v31. One change:
      - Auto-backup control (toggle + interval + countdown) now
        renders ALWAYS in the Drive panel, disabled until you
@@ -786,7 +786,7 @@ td.edit:hover{ box-shadow:inset 0 0 0 1px var(--line); border-radius:5px; }
       <button data-view="internal"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="users" class="lucide lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg>Internal</button>
       <button data-view="scps"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="wrench" class="lucide lucide-wrench"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"></path></svg>Supply Chain</button>
     </nav>
-    <div class="side-foot"><span class="dot"></span>Saved on this device · v31.2</div>
+    <div class="side-foot"><span class="dot"></span>Saved on this device · v31.3</div>
   </aside>
   <main class="main">
     <div class="head">
@@ -968,7 +968,7 @@ function driveFind(){
 }
 function drivePush(){
   var cfg=driveCfg(); if(drive.busy)return Promise.resolve(); if(!cfg.enabled){ driveStatus('Connect Google Drive first','err'); return Promise.resolve(); } drive.busy=true; driveStatus('Backing up to Drive…');
-  var payload=JSON.stringify({app:'jobbin',v:'31.1',savedAt:Date.now(),data:DB});
+  var payload=JSON.stringify({app:'jobbin',v:'31.3',savedAt:Date.now(),data:DB});
   return driveFind().then(function(id){
     var meta={name:DRIVE_FILE, mimeType:'application/json'};
     if(!id) meta.parents=['appDataFolder'];
@@ -1042,7 +1042,7 @@ function drivePanelHtml(){
         ? '<button class="btn pri" id="driveBackupNow"><i data-lucide="cloud-upload"></i>Back up now</button><button class="btn" id="driveRestoreBtn"><i data-lucide="cloud-download"></i>Restore</button><button class="btn danger" id="driveDisconnect"><i data-lucide="log-out"></i>Disconnect</button>'
         : '<button class="btn pri" id="driveConnect"><i data-lucide="cloud"></i>Connect</button>')+
     '</div>'+
-    /* v31.2: auto-backup row ALWAYS shown; disabled until connected */
+    /* v31.3: auto-backup row ALWAYS shown; disabled until connected */
     '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line-soft)">'+
       '<label style="display:inline-flex;align-items:center;gap:8px;font-size:0.86rem;font-weight:600;color:'+(connected?'var(--ink-2)':'var(--ink-3)')+';cursor:'+(connected?'pointer':'not-allowed')+'"><input type="checkbox" id="driveAuto" '+(cfg.auto?'checked':'')+' '+(connected?'':'disabled')+'>Automatic backup</label>'+
       '<select class="f" id="driveInterval" '+((connected&&cfg.auto)?'':'disabled')+'>'+intervals.map(function(o){return '<option value="'+o[0]+'" '+((''+(cfg.interval||0))===o[0]?'selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
