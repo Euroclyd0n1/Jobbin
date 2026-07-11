@@ -1055,6 +1055,14 @@ function render(){
   if(view==='settings') driveScheduleStart();
 }
 var fStatus='', fClient='';
+
+var boardFilters={
+  sortField:'',
+  sortDirection:'',
+  values:{},
+  hideCompleted:false
+};
+
 function viewDashboard(){
   var w=DB.works;
   var open=w.filter(function(x){return CLOSED.indexOf(x.status)<0;});
@@ -1141,20 +1149,181 @@ var  overdue=items.filter(function(it){return  it.over;}).length;
 var q='';
 function filteredRows(){
   var rows=DB.works.slice();
-  if(fStatus)rows=rows.filter(function(r){return r.status===fStatus;});
-  if(fClient)rows=rows.filter(function(r){return r.client===fClient;});
-  if(q){ var t=q.toLowerCase(); rows=rows.filter(function(r){return [r.wqRef,r.client,r.site,r.description,r.supplier,r.nextAction].some(function(v){return (v||'').toLowerCase().indexOf(t)>=0;});}); }
+  var searchText=q.trim().toLowerCase();
+
+  /* Hide completed unless the user is actively searching */
+  if(boardFilters.hideCompleted && !searchText){
+    rows=rows.filter(function(r){
+      return CLOSED.indexOf(r.status)<0;
+    });
+  }
+
+  /* Existing filters */
+  if(fStatus){
+    rows=rows.filter(function(r){
+      return r.status===fStatus;
+    });
+  }
+
+  if(fClient){
+    rows=rows.filter(function(r){
+      return r.client===fClient;
+    });
+  }
+
+  /* Global search includes completed matches */
+  if(searchText){
+
+    rows=rows.filter(function(r){
+      return [
+        r.wqRef,
+        r.client,
+        r.site,
+        r.description,
+        r.supplier,
+        r.nextAction
+      ].some(function(value){
+        return (value||'').toLowerCase().indexOf(searchText)>=0;
+      });
+    });
+  }
+
+  /* Column sorting */
+  if(boardFilters.sortField && boardFilters.sortDirection){
+    var field=boardFilters.sortField;
+    var direction=boardFilters.sortDirection==='asc' ? 1 : -1;
+
+    rows.sort(function(a,b){
+      var av=a[field];
+      var bv=b[field];
+
+      var aEmpty=av==null || av==='';
+var bEmpty=bv==null || bv==='';
+
+if(aEmpty && bEmpty)return 0;
+if(aEmpty)return 1;
+if(bEmpty)return -1;
+
+
+      if(field==='value'){
+        return ((+av)-(+bv))*direction;
+      }
+
+      return String(av).localeCompare(
+        String(bv),
+        undefined,
+        {numeric:true,sensitivity:'base'}
+      )*direction;
+    });
+  }
+
   return rows;
 }
+function boardHeader(field,label){
+  var active=boardFilters.sortField===field;
+  var icon='chevrons-up-down';
+
+  if(active){
+    icon=boardFilters.sortDirection==='asc'
+      ? 'arrow-up'
+      : 'arrow-down';
+  }
+
+  return '<button class="board-head'+(active?' active':'')+'" data-board-sort="'+field+'">'+
+    '<span>'+label+'</span>'+
+    '<i data-lucide="'+icon+'"></i>'+
+  '</button>';
+}
 function viewOverview(){
-  var clients=DB.works.map(function(x){return x.client;}).filter(Boolean).filter(function(v,i,a){return a.indexOf(v)===i;});
+  var clients=DB.works
+    .map(function(x){
+      return x.client;
+    })
+    .filter(Boolean)
+    .filter(function(value,index,array){
+      return array.indexOf(value)===index;
+    });
+
   var rows=filteredRows();
+
   return '<div class="tbl-tools">'+
-    '<div class="search"><i data-lucide="search"></i><input id="q" placeholder="Search works…" value="'+esc(q)+'"></div>'+
-    '<select class="f" id="fStatus"><option value="">All statuses</option>'+STATUSES.map(function(s){return '<option '+(fStatus===s.name?'selected':'')+'>'+s.name+'</option>';}).join('')+'</select>'+
-    '<select class="f" id="fClient"><option value="">All clients</option>'+clients.map(function(c){return '<option '+(fClient===c?'selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'+
-    '<div style="flex:1"></div><button class="btn" id="csvBtn2"><i data-lucide="table"></i>Export CSV</button><button class="btn pri" id="newBtn2"><i data-lucide="plus"></i>New work</button></div>'+
-    (rows.length?'<div class="tbl-wrap"><table><thead><tr><th>Job Ref</th><th>Client</th><th class="hide-sm">Site</th><th>Description</th><th class="hide-sm">Supplier</th><th>Value</th><th>Status</th><th class="hide-sm">Next action</th><th>Due</th><th>Updates</th><th></th></tr></thead><tbody>'+rows.map(rowHtml).join('')+'</tbody></table></div>':emptyState('clipboard-list','No works logged','Add your first Job and it saves right here on this machine. No account, no subscription.','Add a work','newBtn2'));
+
+    '<div class="search">'+
+      '<i data-lucide="search"></i>'+
+      '<input id="q" placeholder="Search works…" value="'+esc(q)+'">'+
+    '</div>'+
+
+    '<select class="f" id="fStatus">'+
+      '<option value="">All statuses</option>'+
+      STATUSES.map(function(status){
+        return '<option '+(fStatus===status.name?'selected':'')+'>'+
+          status.name+
+        '</option>';
+      }).join('')+
+    '</select>'+
+
+    '<select class="f" id="fClient">'+
+      '<option value="">All clients</option>'+
+      clients.map(function(client){
+        return '<option '+(fClient===client?'selected':'')+'>'+
+          esc(client)+
+        '</option>';
+      }).join('')+
+    '</select>'+
+
+    '<button class="btn" id="toggleCompleted" title="'+
+      (boardFilters.hideCompleted?'Show completed jobs':'Hide completed jobs')+
+    '">'+
+      '<i data-lucide="'+
+        (boardFilters.hideCompleted?'eye':'eye-off')+
+      '"></i>'+
+    '</button>'+
+
+    '<div style="flex:1"></div>'+
+
+    '<button class="btn" id="csvBtn2">'+
+      '<i data-lucide="table"></i>Export CSV'+
+    '</button>'+
+
+    '<button class="btn pri" id="newBtn2">'+
+      '<i data-lucide="plus"></i>New work'+
+    '</button>'+
+
+  '</div>'+
+
+  (
+    rows.length
+      ? '<div class="tbl-wrap">'+
+          '<table>'+
+            '<thead>'+
+              '<tr>'+
+  '<th>'+boardHeader('wqRef','Job Ref')+'</th>'+
+  '<th>'+boardHeader('client','Client')+'</th>'+
+  '<th class="hide-sm">'+boardHeader('site','Site')+'</th>'+
+  '<th>'+boardHeader('description','Description')+'</th>'+
+  '<th class="hide-sm">'+boardHeader('supplier','Supplier')+'</th>'+
+  '<th>'+boardHeader('value','Value')+'</th>'+
+  '<th>'+boardHeader('status','Status')+'</th>'+
+  '<th class="hide-sm">'+boardHeader('nextAction','Next action')+'</th>'+
+  '<th>'+boardHeader('dueDate','Due')+'</th>'+
+  '<th>Updates</th>'+
+  '<th></th>'+
+'</tr>'+
+            '</thead>'+
+            '<tbody>'+
+              rows.map(rowHtml).join('')+
+            '</tbody>'+
+          '</table>'+
+        '</div>'
+      : emptyState(
+          'clipboard-list',
+          'No works logged',
+          'Add your first Job and it saves right here on this machine. No account, no subscription.',
+          'Add a work',
+          'newBtn2'
+        )
+  );
+
 }
 function rowHtml(r){
   var m=statusMeta(r.status);
@@ -1485,6 +1654,29 @@ function bindView(){
     };
   } else if(view==='overview'){
     c.onclick=function(e){
+      var sortButton=e.target.closest('[data-board-sort]');
+
+if(sortButton){
+  var sortField=sortButton.getAttribute('data-board-sort');
+
+  if(boardFilters.sortField===sortField){
+    boardFilters.sortDirection=
+      boardFilters.sortDirection==='asc'
+        ? 'desc'
+        : 'asc';
+  }else{
+    boardFilters.sortField=sortField;
+    boardFilters.sortDirection='asc';
+  }
+
+  render();
+  return;
+}
+      if(e.target.closest('#toggleCompleted')){
+  boardFilters.hideCompleted=!boardFilters.hideCompleted;
+  render();
+  return;
+}
       if(e.target.closest('#newBtn2')){ openJob(); return; }
       if(e.target.closest('#csvBtn2')){ exportCSV(); return; }
       if(e.target.closest('[data-openjob]')){ openJob(rowIdOf(e.target)); return; }
