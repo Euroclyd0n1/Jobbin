@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html lang="en-US" dir="ltr" data-theme="dark"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"></head><body>
+<html lang="en-US" dir="ltr" data-theme="dark"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Jobbin · v31.3</title><link rel="icon" type="image/svg+xml" href="./jobbit-favicon.svg"></head><body>
 
 <!-- skill:chrome -->
 <style>
@@ -1139,7 +1139,7 @@ function scpStatsFor(co){ return statsBy(function(w){return w.supplier===co;}); 
 function openScrimModal(scrim,modal){ $('#'+scrim).classList.add('show'); $('#'+modal).classList.add('show'); }
 function closeScrimModal(scrim,modal){ $('#'+scrim).classList.remove('show'); $('#'+modal).classList.remove('show'); }
 var _confCb=null;
-function confirmDel(title,msg,cb){ var a=$('#confTitle'),b=$('#confMsg'); if(a)a.textContent=title; if(b)b.textContent=msg; _confCb=cb; $('#confScrim').classList.add('show'); $('#confirmCard').classList.add('show'); }
+function confirmDel(title,msg,cb,primaryLabel){ var a=$('#confTitle'),b=$('#confMsg'),ok=$('#confOk'); if(a)a.textContent=title; if(b)b.textContent=msg; if(ok)ok.textContent=primaryLabel||'Delete'; _confCb=cb; $('#confScrim').classList.add('show'); $('#confirmCard').classList.add('show'); }
 function closeConfirm(){ $('#confScrim').classList.remove('show'); $('#confirmCard').classList.remove('show'); _confCb=null; }
 function refreshOverviewRow(id){
   if(view!=='overview')return;
@@ -2245,8 +2245,8 @@ if((b=e.target.closest('[data-editscp]'))){
       if(e.target.closest('#driveConnect')){ driveConnect(); return; }
       if(e.target.closest('#driveDisconnect')){ driveDisconnect(); return; }
       if(e.target.closest('#driveBackupNow')){ drivePush(); return; }
-      if(e.target.closest('#driveRestoreBtn')){ confirmDel('Restore from Drive?','This replaces the data on this device with the copy from Google Drive.',function(){ drivePull(); }); return; }
-      if(e.target.closest('#wipeBtn')){ confirmDel('Reset everything?','All works, clients, contacts, suppliers and tasks on this device will be wiped. This cannot be undone.',function(){ DB=seed(); save(); applyTheme(); go('dashboard'); toast('Data reset'); }); return; }
+      if(e.target.closest('#driveRestoreBtn')){ confirmDel('Restore from Drive?','This replaces the data on this device with the copy from Google Drive.',function(){ drivePull(); },'Restore'); return; }
+      if(e.target.closest('#wipeBtn')){ confirmDel('Reset everything?','All works, clients, contacts, suppliers and tasks on this device will be wiped. This cannot be undone.',function(){ DB=seed(); save(); applyTheme(); go('dashboard'); toast('Data reset'); },'Reset'); return; }
     };
     c.onchange=function(e){
       if(e.target.id==='importFile'){ importBackup(e); }
