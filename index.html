@@ -876,8 +876,15 @@ function applyTheme(){
 }
 try{ if(window.matchMedia){ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){ applyTheme(); }); } }catch(e){}
 function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},schemaVersion:1}; }
-var CURRENT_SCHEMA_VERSION=1;
-var MIGRATIONS=[];
+var CURRENT_SCHEMA_VERSION=2;
+var MIGRATIONS=[
+  // v1 -> v2: give every supply-chain partner an empty structured coverage list
+  function(data){
+    (data.scps||[]).forEach(function(s){ if(!Array.isArray(s.coverageRegions)) s.coverageRegions=[]; });
+    return data;
+  }
+];
+
 function runMigrations(data){
   if(!data||typeof data!=='object')return data;
   var v=data.schemaVersion||1;
@@ -917,10 +924,10 @@ function seed(){
     {id:uid(),name:'Northgate Estates',managers:[{id:uid(),name:'Regional team',email:'',phone:'',sites:[{id:uid(),name:'Kingsway Tower',address:'1 Kingsway, London, WC2',phone:'020 0000111',people:[]},{id:uid(),name:'Riverside Depot',address:'Riverside Ind. Est, Leeds, LS10',phone:'0113 000222',people:[]}]}]}
   ];
   d.scps=[
-    {id:uid(),company:'Apex Mechanical',phone:'0800 000111',regions:'South East, London',trades:[{trade:'Mechanical',rating:5},{trade:'HVAC',rating:5},{trade:'Plumbing',rating:4}],people:[{id:uid(),name:'Dave Mills',role:'Contracts Mgr',email:'dave@apexmech.example',phone:'07700 901000'}]},
-    {id:uid(),company:'Voltec Electrical',phone:'0800 000222',regions:'South East',trades:[{trade:'Electrical',rating:4},{trade:'Fire Safety',rating:3}],people:[]},
-    {id:uid(),company:'Summit Roofing',phone:'0800 000333',regions:'North West, Yorkshire',trades:[{trade:'Roofing',rating:4},{trade:'Fabric',rating:3}],people:[]},
-    {id:uid(),company:'GroundsCo',phone:'0800 000444',regions:'National',trades:[{trade:'Grounds',rating:5},{trade:'Drainage',rating:4}],people:[]}
+    {id:uid(),company:'Apex Mechanical',phone:'0800 000111',regions:'South East, London',coverageRegions:[{code:'E12000008',label:'South East',country:'UK'},{code:'E12000007',label:'London',country:'UK'}],trades:[{trade:'Mechanical',rating:5},{trade:'HVAC',rating:5},{trade:'Plumbing',rating:4}],people:[{id:uid(),name:'Dave Mills',role:'Contracts Mgr',email:'dave@apexmech.example',phone:'07700 901000'}]},
+    {id:uid(),company:'Voltec Electrical',phone:'0800 000222',regions:'South East',coverageRegions:[{code:'E12000008',label:'South East',country:'UK'}],trades:[{trade:'Electrical',rating:4},{trade:'Fire Safety',rating:3}],people:[]},
+    {id:uid(),company:'Summit Roofing',phone:'0800 000333',regions:'North West, Yorkshire',coverageRegions:[{code:'E12000002',label:'North West',country:'UK'},{code:'E12000003',label:'Yorkshire and The Humber',country:'UK'}],trades:[{trade:'Roofing',rating:4},{trade:'Fabric',rating:3}],people:[]},
+    {id:uid(),company:'GroundsCo',phone:'0800 000444',regions:'National',coverageRegions:[],trades:[{trade:'Grounds',rating:5},{trade:'Drainage',rating:4}],people:[]}
   ];
   d.tasks=[
     {id:'t'+uid(),title:'Chase Voltec for fixed price on Brook House EL remedials',notes:'',bucket:'next',tags:['careuk'],context:'calls',project:'',waitingOn:'',due:isoIn(1),defer:'',chase:'',linkedWorkId:wid('WQ-10433'),done:false,created:Date.now()-3600000*6,doneAt:null},
