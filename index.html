@@ -1916,7 +1916,7 @@ function viewScps(){
   var t=qScp.trim().toLowerCase();
   function scpMatches(s){
     if(!t)return true;
-    var hay=[s.company,s.phone,s.regions]
+      var hay=[s.company,s.phone]
       .concat((s.trades||[]).map(function(x){return x.trade;}))
       .concat((s.people||[]).map(function(p){return [p.name,p.role,p.email,p.phone].join(' ');}))
       .concat((s.coverageRegions||[]).map(function(r){return r.label+' '+r.country;}))
