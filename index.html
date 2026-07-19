@@ -833,6 +833,31 @@ var STATUSES=[
   {name:'On Hold',c:'var(--red)',bg:'var(--red-soft)'}
 ];
 var CLOSED=['Completed','Invoiced'];
+/* Region catalogue: UK is the built-in default. Loaded country map files
+   (task-63) will ADD their regions here at runtime, keyed by country. */
+var REGION_CATALOGUE={
+  UK:[
+    {code:'E12000001',label:'North East'},
+    {code:'E12000002',label:'North West'},
+    {code:'E12000003',label:'Yorkshire and The Humber'},
+    {code:'E12000004',label:'East Midlands'},
+    {code:'E12000005',label:'West Midlands'},
+    {code:'E12000006',label:'East of England'},
+    {code:'E12000007',label:'London'},
+    {code:'E12000008',label:'South East'},
+    {code:'E12000009',label:'South West'},
+    {code:'W92000004',label:'Wales'},
+    {code:'S92000003',label:'Scotland'},
+    {code:'N92000002',label:'Northern Ireland'}
+  ]
+};
+function allRegions(){
+  var out=[];
+  Object.keys(REGION_CATALOGUE).forEach(function(country){
+    REGION_CATALOGUE[country].forEach(function(r){ out.push({code:r.code,label:r.label,country:country}); });
+  });
+  return out;
+}
 var AVCOL=['var(--accent)','var(--blue)','var(--violet)','var(--amber)','var(--green)','var(--red)','var(--slate)'];
 var TYPE_IC={note:'message-square',email:'mail',teams:'video',phone:'phone'};
 var TYPE_ORDER=[['note','message-square','Note'],['email','mail','Email'],['teams','video','Teams'],['phone','phone','Phone']];
@@ -2464,7 +2489,8 @@ function editScpPerson(scpId,personId){
 }
 function editScp(id){
   var s=id?scpById(id):{company:'',phone:'',regions:'',trades:[],people:[]};
-  var tmpPeople=(s.people||[]).slice();
+   var tmpPeople=(s.people||[]).slice();
+  var tmpCoverage=(s.coverageRegions||[]).slice();
   var m=$('#addModal');
   m.classList.remove('sm'); m.style.width='520px';
   function tradeRowHtml(t){
@@ -2476,6 +2502,10 @@ function editScp(id){
   function body(){
     return '<div class="field"><label>Company name</label><input id="sCompany" value="'+esc(s.company||'')+'"></div>'+
       '<div class="grid-2"><div class="field"><label>Main number</label><input id="sPhone" value="'+esc(s.phone||'')+'"></div><div class="field"><label>Regions covered</label><input id="sRegions" value="'+esc(s.regions||'')+'"></div></div>'+
+            '<div class="sec-label">Coverage areas</div>'+
+      '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Regions this contractor covers. Used by search and the coverage map.</div>'+
+      '<div id="scpCoverage" style="display:flex;flex-wrap:wrap;gap:7px"></div>'+
+      '<div class="trade-add-row" style="margin-top:8px"><select id="addCoverageSel"><option value="">+ Add area…</option></select></div>'+
       '<div class="sec-label">Trades & performance ranking</div>'+
       '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Trades come from the master list in Settings. Click the stars to rate each one.</div>'+
       '<div id="tradeRows">'+((s.trades||[]).map(tradeRowHtml).join('')||'<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:10px" id="noTrades">No trades yet</div>')+'</div>'+
@@ -2519,7 +2549,25 @@ function editScp(id){
   function bindPeople(){
     $$('#scpPeople [data-rmperson]').forEach(function(b){ b.addEventListener('click',function(){ tmpPeople.splice(+b.getAttribute('data-rmperson'),1); $('#scpPeople').innerHTML=peopleHtml(); icons(); bindPeople(); }); });
   }
-  bindTradeRows(); bindPeople();
+  function coverageHtml(){
+    return tmpCoverage.length ? tmpCoverage.map(function(r,i){return '<span class="tchip">'+esc(r.label)+'<button type="button" data-rmcov="'+i+'"><i data-lucide="x" width="12" height="12"></i></button></span>';}).join('') : '<div style="font-size:12.5px;color:var(--ink-3)">No areas yet</div>';
+  }
+  function coverageOptions(){
+    return allRegions().filter(function(r){return !tmpCoverage.some(function(c){return c.code===r.code;});});
+  }
+  function renderCoverage(){
+    var wrap=$('#scpCoverage'); if(wrap)wrap.innerHTML=coverageHtml();
+    var sel=$('#addCoverageSel');
+    if(sel){ sel.innerHTML='<option value="">+ Add area…</option>'+coverageOptions().map(function(r){return '<option value="'+r.code+'">'+esc(r.label)+'</option>';}).join(''); }
+    icons();
+    $$('#scpCoverage [data-rmcov]').forEach(function(b){ b.addEventListener('click',function(){ tmpCoverage.splice(+b.getAttribute('data-rmcov'),1); renderCoverage(); }); });
+  }
+  function bindCoverage(){
+    var sel=$('#addCoverageSel');
+    if(sel){ sel.addEventListener('change',function(){ var code=sel.value; if(!code)return; var r=allRegions().find(function(x){return x.code===code;}); if(r){ tmpCoverage.push({code:r.code,label:r.label,country:r.country}); renderCoverage(); } }); }
+    renderCoverage();
+  }
+  bindTradeRows(); bindPeople(); bindCoverage();
   $('#addClose').addEventListener('click',close);
   $('#addCancel').addEventListener('click',close);
   $('#addTradeRow').addEventListener('click',function(){ var nt=$('#noTrades'); if(nt)nt.remove(); var div=document.createElement('div'); div.innerHTML=tradeRowHtml({trade:DB.trades[0]||'',rating:3}); $('#tradeRows').appendChild(div.firstElementChild); bindTradeRows(); });
@@ -2535,7 +2583,7 @@ function editScp(id){
   $('#scpSave').addEventListener('click',function(){
     var nm=$('#sCompany').value.trim(); if(!nm){ toast('Company is required'); return; }
     var trades=$$('#tradeRows .trade-edit-row').map(function(row){ return {trade:row.querySelector('select').value,rating:+row.dataset.rating}; }).filter(function(t){return t.trade;});
-    var data={company:nm,phone:$('#sPhone').value.trim(),regions:$('#sRegions').value.trim(),trades:trades,people:tmpPeople};
+    var data={company:nm,phone:$('#sPhone').value.trim(),regions:$('#sRegions').value.trim(),coverageRegions:tmpCoverage,trades:trades,people:tmpPeople};
     if(id)Object.assign(s,data); else DB.scps.push(Object.assign({id:uid()},data));
     save(); close(); render(); toast(id?'SCP saved':'SCP added');
   });
