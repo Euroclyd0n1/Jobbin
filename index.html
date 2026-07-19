@@ -2501,11 +2501,10 @@ function editScp(id){
   }
   function body(){
     return '<div class="field"><label>Company name</label><input id="sCompany" value="'+esc(s.company||'')+'"></div>'+
-      '<div class="grid-2"><div class="field"><label>Main number</label><input id="sPhone" value="'+esc(s.phone||'')+'"></div><div class="field"><label>Regions covered</label><input id="sRegions" value="'+esc(s.regions||'')+'"></div></div>'+
+'<div class="field"><label>Main number</label><input id="sPhone" value="'+esc(s.phone||'')+'"></div>'+
             '<div class="sec-label">Coverage areas</div>'+
       '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Regions this contractor covers. Used by search and the coverage map.</div>'+
       '<div id="scpCoverage" style="display:flex;flex-wrap:wrap;gap:7px"></div>'+
-      '<div class="trade-add-row" style="margin-top:8px"><select id="addCoverageSel"><option value="">+ Add area…</option></select></div>'+
       '<div class="sec-label">Trades & performance ranking</div>'+
       '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Trades come from the master list in Settings. Click the stars to rate each one.</div>'+
       '<div id="tradeRows">'+((s.trades||[]).map(tradeRowHtml).join('')||'<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:10px" id="noTrades">No trades yet</div>')+'</div>'+
@@ -2550,17 +2549,17 @@ function editScp(id){
     $$('#scpPeople [data-rmperson]').forEach(function(b){ b.addEventListener('click',function(){ tmpPeople.splice(+b.getAttribute('data-rmperson'),1); $('#scpPeople').innerHTML=peopleHtml(); icons(); bindPeople(); }); });
   }
   function coverageHtml(){
-    return tmpCoverage.length ? tmpCoverage.map(function(r,i){return '<span class="tchip">'+esc(r.label)+'<button type="button" data-rmcov="'+i+'"><i data-lucide="x" width="12" height="12"></i></button></span>';}).join('') : '<div style="font-size:12.5px;color:var(--ink-3)">No areas yet</div>';
+return allRegions().map(function(r){ var on=tmpCoverage.some(function(c){return c.code===r.code;}); return '<button type="button" class="tchip" data-covtoggle="'+r.code+'" style="cursor:pointer;'+(on?'background:var(--accent-soft);color:var(--green-deep);border-color:var(--green-line)':'')+'">'+(on?'✓ ':'')+esc(r.label)+'</button>'; }).join('');
   }
   function coverageOptions(){
     return allRegions().filter(function(r){return !tmpCoverage.some(function(c){return c.code===r.code;});});
   }
   function renderCoverage(){
-    var wrap=$('#scpCoverage'); if(wrap)wrap.innerHTML=coverageHtml();
+var wrap=$('#scpCoverage'); if(!wrap)return; wrap.innerHTML=coverageHtml(); icons();
     var sel=$('#addCoverageSel');
     if(sel){ sel.innerHTML='<option value="">+ Add area…</option>'+coverageOptions().map(function(r){return '<option value="'+r.code+'">'+esc(r.label)+'</option>';}).join(''); }
     icons();
-    $$('#scpCoverage [data-rmcov]').forEach(function(b){ b.addEventListener('click',function(){ tmpCoverage.splice(+b.getAttribute('data-rmcov'),1); renderCoverage(); }); });
+$$('#scpCoverage [data-covtoggle]').forEach(function(b){ b.addEventListener('click',function(){ var code=b.getAttribute('data-covtoggle'); var i=tmpCoverage.findIndex(function(c){return c.code===code;}); if(i>=0){ tmpCoverage.splice(i,1); } else { var r=allRegions().find(function(x){return x.code===code;}); if(r)tmpCoverage.push({code:r.code,label:r.label,country:r.country}); } renderCoverage(); }); });
   }
   function bindCoverage(){
     var sel=$('#addCoverageSel');
@@ -2583,7 +2582,7 @@ function editScp(id){
   $('#scpSave').addEventListener('click',function(){
     var nm=$('#sCompany').value.trim(); if(!nm){ toast('Company is required'); return; }
     var trades=$$('#tradeRows .trade-edit-row').map(function(row){ return {trade:row.querySelector('select').value,rating:+row.dataset.rating}; }).filter(function(t){return t.trade;});
-    var data={company:nm,phone:$('#sPhone').value.trim(),regions:$('#sRegions').value.trim(),coverageRegions:tmpCoverage,trades:trades,people:tmpPeople};
+    var data={company:nm,phone:$('#sPhone').value.trim(),coverageRegions:tmpCoverage,trades:trades,people:tmpPeople};
     if(id)Object.assign(s,data); else DB.scps.push(Object.assign({id:uid()},data));
     save(); close(); render(); toast(id?'SCP saved':'SCP added');
   });
