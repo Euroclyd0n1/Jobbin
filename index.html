@@ -1911,10 +1911,23 @@ function siteItem(c,m,s,t){
     '<button class="addrow" data-addperson="'+c.id+':'+m.id+':'+s.id+'"><i data-lucide="plus"></i>Add person</button>'+
     '</div></div>';
 }
-var viScp='g', scpCols=3, fTrade='';
+var viScp='g', scpCols=3, fTrade='', qScp='';
 function viewScps(){
-  var list=fTrade?DB.scps.filter(function(s){return s.trades.some(function(t){return t.trade===fTrade;});}):DB.scps;
-  return '<div class="dir-head"><button class="btn pri" id="addScp"><i data-lucide="plus"></i>Add SCP</button><select class="f" id="fTrade"><option value="">All trades</option>'+DB.trades.map(function(t){return '<option '+(fTrade===t?'selected':'')+'>'+esc(t)+'</option>';}).join('')+'</select><div class="spacer"></div>'+(DB.scps.length?colSeg(scpCols,'colsScp')+viewSeg(viScp,'segScp'):'')+'</div>'+
+  var t=qScp.trim().toLowerCase();
+  function scpMatches(s){
+    if(!t)return true;
+    var hay=[s.company,s.phone,s.regions]
+      .concat((s.trades||[]).map(function(x){return x.trade;}))
+      .concat((s.people||[]).map(function(p){return [p.name,p.role,p.email,p.phone].join(' ');}))
+      .concat((s.coverageRegions||[]).map(function(r){return r.label+' '+r.country;}))
+      .join(' ').toLowerCase();
+    return hay.indexOf(t)>=0;
+  }
+  var list=DB.scps.filter(function(s){
+    if(fTrade && !s.trades.some(function(x){return x.trade===fTrade;}))return false;
+    return scpMatches(s);
+  });
+  return '<div class="dir-head"><button class="btn pri" id="addScp"><i data-lucide="plus"></i>Add SCP</button><div class="search" style="max-width:340px"><i data-lucide="search"></i><input id="qScp" placeholder="Search company, trade, region…" value="'+esc(qScp)+'"></div><select class="f" id="fTrade"><option value="">All trades</option>'+DB.trades.map(function(t){return '<option '+(fTrade===t?'selected':'')+'>'+esc(t)+'</option>';}).join('')+'</select><div class="spacer"></div>'+(DB.scps.length?colSeg(scpCols,'colsScp')+viewSeg(viScp,'segScp'):'')+'</div>'+
     (list.length?'<div class="cards '+viScp+'" style="--cols:'+scpCols+'">'+list.map(scpCard).join('')+'</div>':emptyState('wrench','No supply chain partners','Add a company, rank their trades by how well they perform, and log the regions they cover and their people.','Add SCP','addScp'));
 }
 function scpCard(s){
@@ -2233,6 +2246,7 @@ if(sortButton){
     };
     c.oninput=function(e){ if(e.target.id==='qClients'){ qClients=e.target.value; var pos=e.target.selectionStart; render(); var ni=$('#qClients'); if(ni){ ni.focus(); if(pos!=null)try{ni.setSelectionRange(pos,pos);}catch(_){} } } };
   } else if(view==='scps'){
+    c.oninput=function(e){ if(e.target.id==='qScp'){ qScp=e.target.value; var pos=e.target.selectionStart; render(); var ni=$('#qScp'); if(ni){ ni.focus(); if(pos!=null)try{ni.setSelectionRange(pos,pos);}catch(_){} } } };
     c.onclick=function(e){
       if(e.target.closest('#addScp')){ editScp(); return; }
       var sg=e.target.closest('#segScp [data-v]'); if(sg){ viScp=sg.dataset.v; render(); return; }
