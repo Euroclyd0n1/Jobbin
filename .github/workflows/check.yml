@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Get the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Use Node 20
-        uses: actions/setup-node@v4
+      - name: Use Node 22
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Run the checks
         run: node scripts/check-index.mjs
