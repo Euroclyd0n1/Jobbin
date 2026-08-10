@@ -402,6 +402,10 @@ td.edit:hover{ box-shadow:inset 0 0 0 1px var(--line); border-radius:5px; }
 .meta{ margin-top:11px; display:flex; flex-direction:column; gap:5px; }
 .meta div{ display:flex; align-items:center; gap:7px; font-size:0.82rem; color:var(--ink-2); }
 .meta i{ width:14px; height:14px; color:var(--ink-3); flex:0 0 auto; }
+.coverage-edit{ display:flex; align-items:center; gap:7px; width:max-content; padding:0; color:var(--ink-2); font-size:0.82rem; cursor:pointer; transition:color .12s; }
+.coverage-edit:hover{ color:var(--accent); }
+.coverage-edit:hover i{ color:var(--accent); }
+.coverage-edit.empty{ color:var(--ink-3); }
 .tags{ margin-top:11px; display:flex; flex-wrap:wrap; gap:6px; }
 .tag{ font-size:0.72rem; font-weight:600; padding:2px 9px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line); }
 .cstats{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:13px; }
@@ -1920,6 +1924,8 @@ function viewScps(){
 }
 function scpCard(s){
   var st=scpStatsFor(s.company);
+  var coverage=s.coverageRegions||[];
+  var coverageText=coverage.length?(coverage.length===1?'1 area':coverage.length+' areas'):'No coverage set';
   var top=s.trades.slice().sort(function(a,b){
   return a.trade.localeCompare(b.trade);
 });
@@ -1933,7 +1939,7 @@ function scpCard(s){
     '<button class="addrow" data-addscpperson="'+s.id+'"><i data-lucide="user-plus"></i>Add person</button>';
   return '<div class="pcard" data-id="'+s.id+'"><div class="card-act"><button class="icon-btn" data-editscp><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delscp><i data-lucide="trash-2"></i></button></div>'+
     '<div class="nm"><span class="av" style="background:'+avc(s.company)+'">'+initials(s.company)+'</span>'+esc(s.company)+'</div>'+
-    '<div class="meta">'+(s.phone?'<div><i data-lucide="phone"></i>'+esc(s.phone)+'</div>':'')+(s.regions?'<div><i data-lucide="map"></i>'+esc(s.regions)+'</div>':'')+'</div>'+
+    '<div class="meta">'+(s.phone?'<div><i data-lucide="phone"></i>'+esc(s.phone)+'</div>':'')+'<button type="button" class="coverage-edit'+(coverage.length?'':' empty')+'" data-editcoverage title="Edit coverage areas"><i data-lucide="map"></i>'+coverageText+'</button></div>'+
     '<div class="cstats">'+
     '<div class="open"><div class="lbl"><i data-lucide="loader"></i>Open</div><div class="n">'+st.open+'</div><div class="v">'+money(st.openVal)+'</div></div>'+
     '<div class="closed"><div class="lbl"><i data-lucide="circle-check-big"></i>Closed</div><div class="n">'+st.closed+'</div><div class="v">'+money(st.closedVal)+'</div></div>'+
@@ -2267,6 +2273,7 @@ if((b=e.target.closest('[data-rate]'))){
 
 if((b=e.target.closest('[data-editscp]'))){
  editScp(cardIdOf(e.target)); return; }
+      if((b=e.target.closest('[data-editcoverage]'))){ editScpCoverage(cardIdOf(e.target)); return; }
       if((b=e.target.closest('[data-delscp]'))){ var id=cardIdOf(e.target),s=scpById(id); confirmDel('Delete SCP?',s.company+' will be removed.',function(){ DB.scps=DB.scps.filter(function(x){return x.id!==id;}); save(); render(); toast('SCP deleted'); }); return; }
       if((b=e.target.closest('[data-rmtrade]'))){ var p=b.getAttribute('data-rmtrade').split('|'),sp=scpById(p[0]); confirmDel('Remove trade?','“'+p[1]+'” will be removed from '+sp.company+'.',function(){ sp.trades=sp.trades.filter(function(t){return t.trade!==p[1];}); save(); render(); toast('Trade removed'); }); return; }
       if((b=e.target.closest('[data-editscpperson]'))){ var pe=b.getAttribute('data-editscpperson').split('|'); editScpPerson(pe[0],pe[1]); return; }
@@ -2489,11 +2496,77 @@ function editScpPerson(scpId,personId){
     field('Name','spfName',p.name)+field('Role','spfRole',p.role)+field('Email','spfEmail',p.email)+field('Phone','spfPhone',p.phone),
     function(){ var nm=$('#spfName').value.trim(); if(!nm){toast('Name is required');return false;} p.name=nm; p.role=$('#spfRole').value.trim(); p.email=$('#spfEmail').value.trim(); p.phone=$('#spfPhone').value.trim(); openSet[s.id+':people']=1; save(); toast('Person saved'); });
 }
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function mountCoveragePicker(container,coverage,mapHeight){
+  var coverageMap=null,coverageLayer=null,active=true;
+  var mapEl,chipEl;
+  container.innerHTML='<div data-coverage-map style="height:'+mapHeight+'px;margin-bottom:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden"></div>'+
+    '<div style="display:flex;gap:7px;margin:0 0 9px"><button type="button" class="btn sm" data-coverage-select-all>Select all</button><button type="button" class="btn sm" data-coverage-clear-all>Clear all</button></div>'+
+    '<div data-coverage-chips style="display:flex;flex-wrap:wrap;gap:7px"></div>';
+  mapEl=container.querySelector('[data-coverage-map]');
+  chipEl=container.querySelector('[data-coverage-chips]');
+  function isSelected(code){ return coverage.some(function(r){return r.code===code;}); }
+  function toggleRegion(region){
+    var i=coverage.findIndex(function(r){return r.code===region.code;});
+    if(i>=0)coverage.splice(i,1); else coverage.push({code:region.code,label:region.label,country:region.country});
+  }
+  function coverageStyle(feature){
+    var selected=isSelected(feature.properties.jbCode);
+    return {color:cssVar('--line'),weight:1,fillColor:selected?cssVar('--accent'):cssVar('--surface-2'),fillOpacity:selected?0.55:0.35};
+  }
+  function syncCoverageMap(){ if(coverageLayer)coverageLayer.setStyle(coverageStyle); }
+  function renderCoverage(){
+    chipEl.innerHTML=allRegions().map(function(region){
+      var on=isSelected(region.code);
+      return '<button type="button" class="tchip" data-covtoggle="'+esc(region.code)+'" style="cursor:pointer;'+(on?'background:var(--accent-soft);color:var(--green-deep);border-color:var(--green-line)':'')+'">'+(on?'✓ ':'')+esc(region.label)+'</button>';
+    }).join('');
+    $$("[data-covtoggle]",chipEl).forEach(function(button){ button.addEventListener('click',function(){
+      var region=allRegions().find(function(r){return r.code===button.getAttribute('data-covtoggle');});
+      if(region){ toggleRegion(region); renderCoverage(); syncCoverageMap(); }
+    }); });
+  }
+  function fitCoverageMap(){
+    if(!coverageMap||!coverageLayer)return;
+    var bounds=coverageLayer.getBounds();
+coverageMap.fitBounds(coverageLayer.getBounds(),{padding:[6,6],maxZoom:coverageMap.getBoundsZoom(coverageLayer.getBounds(),true)})  }
+  function onResize(){ if(coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } }
+  function initMap(){
+    try{
+      window.jbBoundaries.load('UK').then(function(features){
+        if(!active||!mapEl.isConnected)return;
+        coverageMap=L.map(mapEl,{scrollWheelZoom:false,attributionControl:false,Zoomsnap:0});
+        coverageLayer=L.geoJSON({type:'FeatureCollection',features:features},{
+          style:coverageStyle,
+          onEachFeature:function(feature,layer){
+            var p=feature.properties;
+            layer.bindTooltip(p.jbLabel);
+            layer.on({
+              click:function(){ toggleRegion({code:p.jbCode,label:p.jbLabel,country:p.jbCountry}); renderCoverage(); syncCoverageMap(); },
+              mouseover:function(){ var style=coverageStyle(feature); layer.setStyle({fillOpacity:style.fillOpacity+0.12}); },
+              mouseout:function(){ layer.setStyle(coverageStyle(feature)); }
+            });
+          }
+        }).addTo(coverageMap);
+        coverageMap.invalidateSize();
+        fitCoverageMap();
+        window.addEventListener('resize',onResize);
+        setTimeout(function(){ if(active&&coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } },250);
+      }).catch(function(){ mapEl.style.display='none'; });
+    }catch(err){ mapEl.style.display='none'; }
+  }
+  container.querySelector('[data-coverage-select-all]').addEventListener('click',function(){
+    allRegions().forEach(function(region){ if(!isSelected(region.code))coverage.push({code:region.code,label:region.label,country:region.country}); });
+    renderCoverage(); syncCoverageMap();
+  });
+  container.querySelector('[data-coverage-clear-all]').addEventListener('click',function(){ coverage.splice(0,coverage.length); renderCoverage(); syncCoverageMap(); });
+  renderCoverage(); initMap();
+  return {destroy:function(){ active=false; window.removeEventListener('resize',onResize); if(coverageMap){ coverageMap.remove(); coverageMap=null; } }};
+}
 function editScp(id){
-  var s=id?scpById(id):{company:'',phone:'',regions:'',trades:[],people:[]};
+  var s=id?scpById(id):{company:'',phone:'',trades:[],people:[]};
    var tmpPeople=(s.people||[]).slice();
   var tmpCoverage=(s.coverageRegions||[]).slice();
-  var coverageMap=null,coverageLayer=null,coverageMapActive=true;
+  var coveragePicker;
   var m=$('#addModal');
   m.classList.remove('sm'); m.style.width='520px';
   function tradeRowHtml(t){
@@ -2507,8 +2580,7 @@ function editScp(id){
 '<div class="field"><label>Main number</label><input id="sPhone" value="'+esc(s.phone||'')+'"></div>'+
             '<div class="sec-label">Coverage areas</div>'+
       '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Regions this contractor covers. Used by search and the coverage map.</div>'+
-      '<div id="scpCoverageMap" style="height:320px;margin-bottom:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden"></div>'+
-      '<div id="scpCoverage" style="display:flex;flex-wrap:wrap;gap:7px"></div>'+
+      '<div id="scpCoveragePicker"></div>'+
       '<div class="sec-label">Trades & performance ranking</div>'+
       '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Trades come from the master list in Settings. Click the stars to rate each one.</div>'+
       '<div id="tradeRows">'+((s.trades||[]).map(tradeRowHtml).join('')||'<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:10px" id="noTrades">No trades yet</div>')+'</div>'+
@@ -2519,7 +2591,7 @@ function editScp(id){
   }
   m.innerHTML='<div class="modal-head"><h2>'+(id?'Edit SCP':'Add supply chain partner')+'</h2><button class="icon-btn" id="addClose"><i data-lucide="x"></i></button></div><div class="modal-body">'+body()+'</div><div class="modal-foot">'+(id?'<button class="btn danger" id="scpDel"><i data-lucide="trash-2"></i>Delete</button>':'')+'<div class="grow"></div><button class="btn" id="addCancel">Cancel</button><button class="btn pri" id="scpSave"><i data-lucide="check"></i>Save</button></div>';
   openScrimModal('addScrim','addModal'); icons();
-  function close(){ coverageMapActive=false; if(coverageMap){ coverageMap.remove(); coverageMap=null; } closeScrimModal('addScrim','addModal'); m.classList.add('sm'); m.style.width=''; }
+  function close(){ if(coveragePicker)coveragePicker.destroy(); coveragePicker=null; m._coveragePickerCleanup=null; closeScrimModal('addScrim','addModal'); m.classList.add('sm'); m.style.width=''; }
   function bindTradeRows(){
   icons();
 
@@ -2552,61 +2624,9 @@ function editScp(id){
   function bindPeople(){
     $$('#scpPeople [data-rmperson]').forEach(function(b){ b.addEventListener('click',function(){ tmpPeople.splice(+b.getAttribute('data-rmperson'),1); $('#scpPeople').innerHTML=peopleHtml(); icons(); bindPeople(); }); });
   }
-  function coverageHtml(){
-return allRegions().map(function(r){ var on=tmpCoverage.some(function(c){return c.code===r.code;}); return '<button type="button" class="tchip" data-covtoggle="'+r.code+'" style="cursor:pointer;'+(on?'background:var(--accent-soft);color:var(--green-deep);border-color:var(--green-line)':'')+'">'+(on?'✓ ':'')+esc(r.label)+'</button>'; }).join('');
-  }
-  function coverageOptions(){
-    return allRegions().filter(function(r){return !tmpCoverage.some(function(c){return c.code===r.code;});});
-  }
-  function renderCoverage(){
-var wrap=$('#scpCoverage'); if(!wrap)return; wrap.innerHTML=coverageHtml(); icons();
-    var sel=$('#addCoverageSel');
-    if(sel){ sel.innerHTML='<option value="">+ Add area…</option>'+coverageOptions().map(function(r){return '<option value="'+r.code+'">'+esc(r.label)+'</option>';}).join(''); }
-    icons();
-$$('#scpCoverage [data-covtoggle]').forEach(function(b){ b.addEventListener('click',function(){ var code=b.getAttribute('data-covtoggle'); var i=tmpCoverage.findIndex(function(c){return c.code===code;}); if(i>=0){ tmpCoverage.splice(i,1); } else { var r=allRegions().find(function(x){return x.code===code;}); if(r)tmpCoverage.push({code:r.code,label:r.label,country:r.country}); } renderCoverage(); syncCoverageMap(); }); });
-  }
-  function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-  function coverageStyle(feature){
-    var selected=tmpCoverage.some(function(r){return r.code===feature.properties.jbCode;});
-    return {color:cssVar('--line'),weight:1,fillColor:selected?cssVar('--accent'):cssVar('--surface-2'),fillOpacity:selected?0.55:0.35};
-  }
-  function syncCoverageMap(){ if(coverageLayer) coverageLayer.setStyle(coverageStyle); }
-  function initCoverageMap(){
-    var mapEl=$('#scpCoverageMap');
-    if(!mapEl)return;
-    try{
-      window.jbBoundaries.load('UK').then(function(features){
-        if(!coverageMapActive||!mapEl.isConnected)return;
-        coverageMap=L.map(mapEl,{scrollWheelZoom:false,attributionControl:false});
-        coverageLayer=L.geoJSON({type:'FeatureCollection',features:features},{
-          style:coverageStyle,
-          onEachFeature:function(feature,layer){
-            var p=feature.properties;
-            layer.bindTooltip(p.jbLabel);
-            layer.on({
-              click:function(){
-                var i=tmpCoverage.findIndex(function(r){return r.code===p.jbCode;});
-                if(i>=0)tmpCoverage.splice(i,1); else tmpCoverage.push({code:p.jbCode,label:p.jbLabel,country:p.jbCountry});
-                renderCoverage(); syncCoverageMap();
-              },
-              mouseover:function(){ var st=coverageStyle(feature); layer.setStyle({fillOpacity:st.fillOpacity+0.12}); },
-              mouseout:function(){ layer.setStyle(coverageStyle(feature)); }
-            });
-          }
-        }).addTo(coverageMap);
-        if(coverageLayer.getBounds().isValid()){
-          coverageMap.fitBounds(coverageLayer.getBounds());
-          setTimeout(function(){ coverageMap.invalidateSize(); if(coverageLayer.getBounds().isValid())coverageMap.fitBounds(coverageLayer.getBounds()); },0);
-        }
-      }).catch(function(){ mapEl.style.display='none'; });
-    }catch(err){ mapEl.style.display='none'; }
-  }
-  function bindCoverage(){
-    var sel=$('#addCoverageSel');
-    if(sel){ sel.addEventListener('change',function(){ var code=sel.value; if(!code)return; var r=allRegions().find(function(x){return x.code===code;}); if(r){ tmpCoverage.push({code:r.code,label:r.label,country:r.country}); renderCoverage(); } }); }
-    renderCoverage();
-  }
-  bindTradeRows(); bindPeople(); bindCoverage(); initCoverageMap();
+  coveragePicker=mountCoveragePicker($('#scpCoveragePicker'),tmpCoverage,320);
+  m._coveragePickerCleanup=coveragePicker.destroy;
+  bindTradeRows(); bindPeople();
   $('#addClose').addEventListener('click',close);
   $('#addCancel').addEventListener('click',close);
   $('#addTradeRow').addEventListener('click',function(){ var nt=$('#noTrades'); if(nt)nt.remove(); var div=document.createElement('div'); div.innerHTML=tradeRowHtml({trade:DB.trades[0]||'',rating:3}); $('#tradeRows').appendChild(div.firstElementChild); bindTradeRows(); });
@@ -2628,6 +2648,20 @@ $$('#scpCoverage [data-covtoggle]').forEach(function(b){ b.addEventListener('cli
   });
   if(id){ $('#scpDel').addEventListener('click',function(){ confirmDel('Delete SCP?',s.company+' will be removed.',function(){ DB.scps=DB.scps.filter(function(x){return x.id!==id;}); save(); close(); render(); toast('SCP deleted'); }); }); }
 }
+function editScpCoverage(id){
+  var s=scpById(id); if(!s)return;
+  var tmpCoverage=(s.coverageRegions||[]).slice();
+  var m=$('#addModal'),coveragePicker;
+  m.classList.remove('sm'); m.style.width='520px';
+  m.innerHTML='<div class="modal-head"><h2>Coverage areas</h2><button class="icon-btn" id="addClose"><i data-lucide="x"></i></button></div><div class="modal-body"><div id="scpCoveragePicker"></div></div><div class="modal-foot"><div class="grow"></div><button class="btn" id="addCancel">Cancel</button><button class="btn pri" id="coverageSave"><i data-lucide="check"></i>Save</button></div>';
+  openScrimModal('addScrim','addModal'); icons();
+  coveragePicker=mountCoveragePicker($('#scpCoveragePicker'),tmpCoverage,460);
+  m._coveragePickerCleanup=coveragePicker.destroy;
+  function close(){ if(coveragePicker)coveragePicker.destroy(); coveragePicker=null; m._coveragePickerCleanup=null; closeScrimModal('addScrim','addModal'); m.classList.add('sm'); m.style.width=''; }
+  $('#addClose').addEventListener('click',close);
+  $('#addCancel').addEventListener('click',close);
+  $('#coverageSave').addEventListener('click',function(){ s.coverageRegions=tmpCoverage; save(); close(); render(); toast('Coverage saved'); });
+}
 function wireChrome(){
   $('#nav').addEventListener('click',function(e){ var b=e.target.closest('button'); if(b&&b.dataset.view)go(b.dataset.view); });
   $('#cogBtn').addEventListener('click',function(){ go('settings'); });
@@ -2636,7 +2670,7 @@ function wireChrome(){
   $('#confOk').addEventListener('click',function(){ var cb=_confCb; closeConfirm(); if(cb)cb(); });
   $('#confScrim').addEventListener('click',closeConfirm);
   $('#jobScrim').addEventListener('click',function(){ closeScrimModal('jobScrim','jobModal'); });
-  $('#addScrim').addEventListener('click',function(){ closeScrimModal('addScrim','addModal'); var m=$('#addModal'); m.classList.add('sm'); m.style.width=''; });
+  $('#addScrim').addEventListener('click',function(){ var m=$('#addModal'); if(m._coveragePickerCleanup){ m._coveragePickerCleanup(); m._coveragePickerCleanup=null; } closeScrimModal('addScrim','addModal'); m.classList.add('sm'); m.style.width=''; });
   $('#sideScrim').addEventListener('click',function(){ $('#sideScrim').classList.remove('show'); $('#drawer').classList.remove('show'); });
 }
 function afterLoad(){
