@@ -96,6 +96,9 @@
   --shadow-lg: -18px 0 50px oklch(0 0 0 / 0.45);
 }
 [data-theme="dark"] .scrim{ background:oklch(0 0 0 / 0.55); }
+.leaflet-container:focus,
+.leaflet-container *:focus,
+.leaflet-interactive:focus{ outline:none !important; }
 html{ transition:background-color .25s var(--ease); }
 *{ box-sizing:border-box; margin:0; padding:0; }
 html,body{ height:100%; }
