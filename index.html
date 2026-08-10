@@ -5,6 +5,8 @@
   crossorigin="anonymous"
 ></script>
 </head><body>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/lucide@0.544.0/dist/umd/lucide.min.js"></script>
 <script>document.addEventListener("DOMContentLoaded",()=>lucide.createIcons())</script>
 <base href=".">
@@ -797,6 +799,46 @@ function allRegions(){
   });
   return out;
 }
+/* ---- Boundary files: one or more per country, fetched on demand, same-origin ---- */
+var BOUNDARY_SOURCES={
+  UK:['./uk-regions-en.json','./uk-countries.json'],
+  FR:['./fr-regions.json']
+};
+var LOADED_BOUNDARIES={};
+function pickProp(props,tests){
+  var keys=Object.keys(props||{});
+  for(var t=0;t<tests.length;t++){ for(var k=0;k<keys.length;k++){ if(tests[t].test(keys[k])) return keys[k]; } }
+  return null;
+}
+function detectFields(props){
+  return { code:pickProp(props,[/^shapeISO$/,/CD$/]), label:pickProp(props,[/^shapeName$/,/NM$/]) };
+}
+function loadBoundaries(country){
+  if(LOADED_BOUNDARIES[country]) return Promise.resolve(LOADED_BOUNDARIES[country]);
+  var urls=BOUNDARY_SOURCES[country]||[];
+  if(!urls.length) return Promise.reject(new Error('No boundary files listed for '+country));
+  return Promise.all(urls.map(function(u){
+    return fetch(u).then(function(r){ if(!r.ok) throw new Error('Could not load '+u+' ('+r.status+')'); return r.json(); });
+  })).then(function(sets){
+    var feats=[];
+    sets.forEach(function(gj){
+      (gj.features||[]).forEach(function(f){
+        var p=f.properties||{}, fld=detectFields(p);
+        if(!fld.code||!fld.label) return;
+        var code=p[fld.code], label=p[fld.label];
+        if(!code||!label) return;
+        f.properties=Object.assign({},p,{jbCode:String(code),jbLabel:String(label),jbCountry:country});
+        feats.push(f);
+      });
+    });
+    LOADED_BOUNDARIES[country]=feats;
+    REGION_CATALOGUE[country]=feats.map(function(f){ return {code:f.properties.jbCode,label:f.properties.jbLabel}; })
+      .sort(function(a,b){ return a.label.localeCompare(b.label); });
+    return feats;
+  });
+}
+window.jbBoundaries={ load:loadBoundaries, catalogue:function(){ return REGION_CATALOGUE; } };
+
 var AVCOL=['var(--accent)','var(--blue)','var(--violet)','var(--amber)','var(--green)','var(--red)','var(--slate)'];
 var TYPE_IC={note:'message-square',email:'mail',teams:'video',phone:'phone'};
 var TYPE_ORDER=[['note','message-square','Note'],['email','mail','Email'],['teams','video','Teams'],['phone','phone','Phone']];
