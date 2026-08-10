@@ -836,7 +836,6 @@ function loadBoundaries(country){
         if((BOUNDARY_EXCLUDE[country]||[]).indexOf(String(code))>=0) return;
         f.properties=Object.assign({},p,{jbCode:String(code),jbLabel:String(label),jbCountry:country});
         feats.push(f);
-      });
     });
     LOADED_BOUNDARIES[country]=feats;
     REGION_CATALOGUE[country]=feats.map(function(f){ return {code:f.properties.jbCode,label:f.properties.jbLabel}; })
