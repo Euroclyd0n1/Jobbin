@@ -2531,13 +2531,13 @@ function mountCoveragePicker(container,coverage,mapHeight){
   function fitCoverageMap(){
     if(!coverageMap||!coverageLayer)return;
     var bounds=coverageLayer.getBounds();
-coverageMap.fitBounds(coverageLayer.getBounds(),{padding:[6,6],maxZoom:coverageMap.getBoundsZoom(coverageLayer.getBounds(),true)})  }
+coverageMap.fitBounds(coverageLayer.getBounds(),{padding:[6,6],maxZoom:coverageMap.getBoundsZoom(coverageLayer.getBounds(),true)-0.3})  }
   function onResize(){ if(coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } }
   function initMap(){
     try{
       window.jbBoundaries.load('UK').then(function(features){
         if(!active||!mapEl.isConnected)return;
-        coverageMap=L.map(mapEl,{scrollWheelZoom:false,attributionControl:false,Zoomsnap:0});
+        coverageMap=L.map(mapEl,{scrollWheelZoom:false,attributionControl:false,zoomSnap:0});
         coverageLayer=L.geoJSON({type:'FeatureCollection',features:features},{
           style:coverageStyle,
           onEachFeature:function(feature,layer){
