@@ -408,7 +408,7 @@ td.edit:hover{ box-shadow:inset 0 0 0 1px var(--line); border-radius:5px; }
 .coverage-edit{ display:flex; align-items:center; gap:7px; width:max-content; padding:0; color:var(--ink-2); font-size:0.82rem; cursor:pointer; transition:color .12s; }
 .coverage-edit:hover{ color:var(--accent); }
 .coverage-edit:hover i{ color:var(--accent); }
-.coverage-edit.empty{ color:var(--ink-3); }
+.coverage-edit.coverage-empty{ color:var(--ink-3); }
 .tags{ margin-top:11px; display:flex; flex-wrap:wrap; gap:6px; }
 .tag{ font-size:0.72rem; font-weight:600; padding:2px 9px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line); }
 .cstats{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:13px; }
@@ -1942,7 +1942,7 @@ function scpCard(s){
     '<button class="addrow" data-addscpperson="'+s.id+'"><i data-lucide="user-plus"></i>Add person</button>';
   return '<div class="pcard" data-id="'+s.id+'"><div class="card-act"><button class="icon-btn" data-editscp><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delscp><i data-lucide="trash-2"></i></button></div>'+
     '<div class="nm"><span class="av" style="background:'+avc(s.company)+'">'+initials(s.company)+'</span>'+esc(s.company)+'</div>'+
-    '<div class="meta">'+(s.phone?'<div><i data-lucide="phone"></i>'+esc(s.phone)+'</div>':'')+'<button type="button" class="coverage-edit'+(coverage.length?'':' empty')+'" data-editcoverage title="Edit coverage areas"><i data-lucide="map"></i>'+coverageText+'</button></div>'+
+    '<div class="meta">'+(s.phone?'<div><i data-lucide="phone"></i>'+esc(s.phone)+'</div>':'')+'<button type="button" class="coverage-edit'+(coverage.length?'':' coverage-empty')+'" data-editcoverage title="Edit coverage areas"><i data-lucide="map"></i>'+coverageText+'</button></div>'+
     '<div class="cstats">'+
     '<div class="open"><div class="lbl"><i data-lucide="loader"></i>Open</div><div class="n">'+st.open+'</div><div class="v">'+money(st.openVal)+'</div></div>'+
     '<div class="closed"><div class="lbl"><i data-lucide="circle-check-big"></i>Closed</div><div class="n">'+st.closed+'</div><div class="v">'+money(st.closedVal)+'</div></div>'+
