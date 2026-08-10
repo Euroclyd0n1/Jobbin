@@ -1190,7 +1190,7 @@ function viewDashboard(){
 
 var  items=[];
 
-w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&CLOSED.indexOf(x.status)<0){ items.push({kind:'job',date:x.dueDate,over:nags(x),job:x}); } });
+w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&CLOSED.indexOf(x.status)<0&&PARKED.indexOf(x.status)<0){ items.push({kind:'job',date:x.dueDate,over:nags(x),job:x}); } });
 
 DB.tasks.forEach(function(t){
 
