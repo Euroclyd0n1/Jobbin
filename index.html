@@ -770,6 +770,8 @@ var STATUSES=[
   {name:'On Hold',c:'var(--red)',bg:'var(--red-soft)'}
 ];
 var CLOSED=['Completed','Invoiced'];
+var PARKED=['On Hold']; // deliberately paused: excluded from overdue/attention nagging, but still an OPEN job in stats (NOT closed)
+function nags(w){ return !!(w.dueDate && w.dueDate<isoIn(0) && CLOSED.indexOf(w.status)<0 && PARKED.indexOf(w.status)<0); }
 /* Region catalogue: UK is the built-in default. Loaded country map files
    (task-63) will ADD their regions here at runtime, keyed by country. */
 var REGION_CATALOGUE={
@@ -1134,7 +1136,7 @@ var view='dashboard';
 var TITLES={dashboard:['Overview','Overview of your job register'],overview:['Job Board','Job register — click the Job ref to open a job, the speech bubble for updates'],tasks:['Tasks','GTD — capture, organise & track every action'],clients:['Clients','Client › regional manager › site › people'],internal:['Internal','Your internal colleagues'],scps:['Supply Chain','Partners, trades & performance'],settings:['Settings','Appearance, storage, Drive backup, trades, export']};
 function go(v){ view=v; $$('#nav button').forEach(function(b){ b.classList.toggle('on',b.dataset.view===v); }); var t=TITLES[v]||TITLES.dashboard; $('#ttl').textContent=t[0]; $('#sub').textContent=t[1]; render(); closeSide(); }
 function closeSide(){ var s=$('#side'); if(s)s.classList.remove('show'); }
-function overdueCount(){ var today=isoIn(0); return DB.works.filter(function(x){return x.dueDate&&x.dueDate<today&&CLOSED.indexOf(x.status)<0;}).length; }
+function overdueCount(){ return DB.works.filter(nags).length; }
 function updateNavCounts(){
   var w=$('#nc-works'); if(w){ w.textContent=DB.works.length; w.classList.toggle('amber',overdueCount()>0); }
   var tk=$('#nc-tasks'); if(tk)tk.textContent=DB.tasks.filter(function(t){return !t.done;}).length;
@@ -1188,7 +1190,7 @@ function viewDashboard(){
 
 var  items=[];
 
-w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&CLOSED.indexOf(x.status)<0){ items.push({kind:'job',date:x.dueDate,over:x.dueDate<today,job:x}); } });
+w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&CLOSED.indexOf(x.status)<0){ items.push({kind:'job',date:x.dueDate,over:nags(x),job:x}); } });
 
 DB.tasks.forEach(function(t){
 
