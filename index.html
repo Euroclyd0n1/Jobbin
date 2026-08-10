@@ -837,6 +837,7 @@ function loadBoundaries(country){
         f.properties=Object.assign({},p,{jbCode:String(code),jbLabel:String(label),jbCountry:country});
         feats.push(f);
     });
+    });
     LOADED_BOUNDARIES[country]=feats;
     REGION_CATALOGUE[country]=feats.map(function(f){ return {code:f.properties.jbCode,label:f.properties.jbLabel}; })
       .sort(function(a,b){ return a.label.localeCompare(b.label); });
@@ -2492,6 +2493,7 @@ function editScp(id){
   var s=id?scpById(id):{company:'',phone:'',regions:'',trades:[],people:[]};
    var tmpPeople=(s.people||[]).slice();
   var tmpCoverage=(s.coverageRegions||[]).slice();
+  var coverageMap=null,coverageLayer=null,coverageMapActive=true;
   var m=$('#addModal');
   m.classList.remove('sm'); m.style.width='520px';
   function tradeRowHtml(t){
@@ -2505,6 +2507,7 @@ function editScp(id){
 '<div class="field"><label>Main number</label><input id="sPhone" value="'+esc(s.phone||'')+'"></div>'+
             '<div class="sec-label">Coverage areas</div>'+
       '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Regions this contractor covers. Used by search and the coverage map.</div>'+
+      '<div id="scpCoverageMap" style="height:320px;margin-bottom:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden"></div>'+
       '<div id="scpCoverage" style="display:flex;flex-wrap:wrap;gap:7px"></div>'+
       '<div class="sec-label">Trades & performance ranking</div>'+
       '<div style="font-size:11.5px;color:var(--ink-3);margin-bottom:10px">Trades come from the master list in Settings. Click the stars to rate each one.</div>'+
@@ -2516,7 +2519,7 @@ function editScp(id){
   }
   m.innerHTML='<div class="modal-head"><h2>'+(id?'Edit SCP':'Add supply chain partner')+'</h2><button class="icon-btn" id="addClose"><i data-lucide="x"></i></button></div><div class="modal-body">'+body()+'</div><div class="modal-foot">'+(id?'<button class="btn danger" id="scpDel"><i data-lucide="trash-2"></i>Delete</button>':'')+'<div class="grow"></div><button class="btn" id="addCancel">Cancel</button><button class="btn pri" id="scpSave"><i data-lucide="check"></i>Save</button></div>';
   openScrimModal('addScrim','addModal'); icons();
-  function close(){ closeScrimModal('addScrim','addModal'); m.classList.add('sm'); m.style.width=''; }
+  function close(){ coverageMapActive=false; if(coverageMap){ coverageMap.remove(); coverageMap=null; } closeScrimModal('addScrim','addModal'); m.classList.add('sm'); m.style.width=''; }
   function bindTradeRows(){
   icons();
 
@@ -2560,14 +2563,50 @@ var wrap=$('#scpCoverage'); if(!wrap)return; wrap.innerHTML=coverageHtml(); icon
     var sel=$('#addCoverageSel');
     if(sel){ sel.innerHTML='<option value="">+ Add area…</option>'+coverageOptions().map(function(r){return '<option value="'+r.code+'">'+esc(r.label)+'</option>';}).join(''); }
     icons();
-$$('#scpCoverage [data-covtoggle]').forEach(function(b){ b.addEventListener('click',function(){ var code=b.getAttribute('data-covtoggle'); var i=tmpCoverage.findIndex(function(c){return c.code===code;}); if(i>=0){ tmpCoverage.splice(i,1); } else { var r=allRegions().find(function(x){return x.code===code;}); if(r)tmpCoverage.push({code:r.code,label:r.label,country:r.country}); } renderCoverage(); }); });
+$$('#scpCoverage [data-covtoggle]').forEach(function(b){ b.addEventListener('click',function(){ var code=b.getAttribute('data-covtoggle'); var i=tmpCoverage.findIndex(function(c){return c.code===code;}); if(i>=0){ tmpCoverage.splice(i,1); } else { var r=allRegions().find(function(x){return x.code===code;}); if(r)tmpCoverage.push({code:r.code,label:r.label,country:r.country}); } renderCoverage(); syncCoverageMap(); }); });
+  }
+  function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function coverageStyle(feature){
+    var selected=tmpCoverage.some(function(r){return r.code===feature.properties.jbCode;});
+    return {color:cssVar('--line'),weight:1,fillColor:selected?cssVar('--accent'):cssVar('--surface-2'),fillOpacity:selected?0.55:0.35};
+  }
+  function syncCoverageMap(){ if(coverageLayer) coverageLayer.setStyle(coverageStyle); }
+  function initCoverageMap(){
+    var mapEl=$('#scpCoverageMap');
+    if(!mapEl)return;
+    try{
+      window.jbBoundaries.load('UK').then(function(features){
+        if(!coverageMapActive||!mapEl.isConnected)return;
+        coverageMap=L.map(mapEl,{scrollWheelZoom:false,attributionControl:false});
+        coverageLayer=L.geoJSON({type:'FeatureCollection',features:features},{
+          style:coverageStyle,
+          onEachFeature:function(feature,layer){
+            var p=feature.properties;
+            layer.bindTooltip(p.jbLabel);
+            layer.on({
+              click:function(){
+                var i=tmpCoverage.findIndex(function(r){return r.code===p.jbCode;});
+                if(i>=0)tmpCoverage.splice(i,1); else tmpCoverage.push({code:p.jbCode,label:p.jbLabel,country:p.jbCountry});
+                renderCoverage(); syncCoverageMap();
+              },
+              mouseover:function(){ var st=coverageStyle(feature); layer.setStyle({fillOpacity:st.fillOpacity+0.12}); },
+              mouseout:function(){ layer.setStyle(coverageStyle(feature)); }
+            });
+          }
+        }).addTo(coverageMap);
+        if(coverageLayer.getBounds().isValid()){
+          coverageMap.fitBounds(coverageLayer.getBounds());
+          setTimeout(function(){ coverageMap.invalidateSize(); if(coverageLayer.getBounds().isValid())coverageMap.fitBounds(coverageLayer.getBounds()); },0);
+        }
+      }).catch(function(){ mapEl.style.display='none'; });
+    }catch(err){ mapEl.style.display='none'; }
   }
   function bindCoverage(){
     var sel=$('#addCoverageSel');
     if(sel){ sel.addEventListener('change',function(){ var code=sel.value; if(!code)return; var r=allRegions().find(function(x){return x.code===code;}); if(r){ tmpCoverage.push({code:r.code,label:r.label,country:r.country}); renderCoverage(); } }); }
     renderCoverage();
   }
-  bindTradeRows(); bindPeople(); bindCoverage();
+  bindTradeRows(); bindPeople(); bindCoverage(); initCoverageMap();
   $('#addClose').addEventListener('click',close);
   $('#addCancel').addEventListener('click',close);
   $('#addTradeRow').addEventListener('click',function(){ var nt=$('#noTrades'); if(nt)nt.remove(); var div=document.createElement('div'); div.innerHTML=tradeRowHtml({trade:DB.trades[0]||'',rating:3}); $('#tradeRows').appendChild(div.firstElementChild); bindTradeRows(); });
