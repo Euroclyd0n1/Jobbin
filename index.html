@@ -804,6 +804,12 @@ var BOUNDARY_SOURCES={
   UK:['./uk-regions-en.json','./uk-countries.json'],
   FR:['./fr-regions.json']
 };
+/* Codes to drop: a source file may contain a coarser level we already cover.
+   England (E92000001) comes from the Countries file but its 9 regions are finer. */
+var BOUNDARY_EXCLUDE={
+  UK:['E92000001']
+};
+
 var LOADED_BOUNDARIES={};
 function pickProp(props,tests){
   var keys=Object.keys(props||{});
@@ -825,8 +831,9 @@ function loadBoundaries(country){
       (gj.features||[]).forEach(function(f){
         var p=f.properties||{}, fld=detectFields(p);
         if(!fld.code||!fld.label) return;
-        var code=p[fld.code], label=p[fld.label];
+                var code=p[fld.code], label=p[fld.label];
         if(!code||!label) return;
+        if((BOUNDARY_EXCLUDE[country]||[]).indexOf(String(code))>=0) return;
         f.properties=Object.assign({},p,{jbCode:String(code),jbLabel:String(label),jbCountry:country});
         feats.push(f);
       });
