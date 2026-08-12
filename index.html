@@ -2579,7 +2579,7 @@ function mountCoveragePicker(container,coverage,mapHeight){
       });
     }
     bounds=bounds||coverageLayer.getBounds();
-    if(bounds.isValid())coverageMap.fitBounds(bounds,{padding:[10,10],maxZoom:coverageMap.getBoundsZoom(bounds,true)-0.3});
+    if(bounds.isValid())coverageMap.fitBounds(bounds,{padding:[10,10],maxZoom:Math.min(coverageMap.getBoundsZoom(bounds,true),6)});
   }
   function onResize(){ if(coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } }
   function layerOptions(){
