@@ -99,6 +99,9 @@
 .leaflet-container:focus,
 .leaflet-container *:focus,
 .leaflet-interactive:focus{ outline:none !important; }
+.leaflet-container{ position:relative; z-index:0; }
+.leaflet-pane, .leaflet-top, .leaflet-bottom, .leaflet-control{ z-index:1 !important; }
+.modal-head, .modal-foot{ z-index:5; }
 html{ transition:background-color .25s var(--ease); }
 *{ box-sizing:border-box; margin:0; padding:0; }
 html,body{ height:100%; }
