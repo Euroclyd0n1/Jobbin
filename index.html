@@ -1863,7 +1863,7 @@ function delWork(id){ var r=workById(id); confirmDel('Delete work?',(r.wqRef||'T
 var viInternal='g', internalCols=3;
 function viewInternal(){
   var list=DB.internal;
-  return '<div class="dir-head"><button class="btn pri" id="addInternal"><i data-lucide="user-plus"></i>Add person</button><div class="spacer"></div>'+(list.length?colSeg(internalCols,'colsInternal')+viewSeg(viInternal,'segInternal'):'')+'</div>'+
+  return '<div class="dir-head"><button class="btn pri" id="addInternal"><i data-lucide="user-plus"></i>Add person</button><div class="spacer"></div>'+(list.length?(viInternal==='g'?colSeg(internalCols,'colsInternal'):'')+viewSeg(viInternal,'segInternal'):'')+'</div>'+
     (list.length?'<div class="cards '+viInternal+'" style="--cols:'+internalCols+'">'+list.map(function(p){return '<div class="pcard" data-id="'+p.id+'"><div class="card-act"><button class="icon-btn" data-edit><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-del><i data-lucide="trash-2"></i></button></div><div class="nm"><span class="av" style="background:'+avc(p.name)+'">'+initials(p.name)+'</span>'+esc(p.name)+'</div><div class="meta">'+(p.role?'<div><i data-lucide="briefcase"></i>'+esc(p.role)+'</div>':'')+(p.email?'<div><i data-lucide="mail"></i>'+esc(p.email)+'</div>':'')+(p.dept?'<div><i data-lucide="layers"></i>'+esc(p.dept)+'</div>':'')+'</div>'+(p.client?'<div class="tags"><span class="tag">'+esc(p.client)+'</span></div>':'')+'</div>';}).join('')+'</div>':emptyState('users','No internal contacts','Add your colleagues: name, email, department, role and the client they cover.','Add person','addInternal'));
 }
 var openSet={};
