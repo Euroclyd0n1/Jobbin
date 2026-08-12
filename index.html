@@ -1881,7 +1881,7 @@ function viewClients(){
   return '<div class="dir-head">'+
     '<button class="btn pri" id="addClient"><i data-lucide="plus"></i>Add client</button>'+
     '<div class="search" style="max-width:380px"><i data-lucide="search"></i><input id="qClients" placeholder="Search clients, sites & people…" value="'+esc(qClients)+'"></div>'+
-    '<div class="spacer"></div>'+(DB.clients.length?colSeg(clientCols,'colsClients')+viewSeg(viClients,'segClients'):'')+'</div>'+body;
+    '<div class="spacer"></div>'+(DB.clients.length?(viClients==='g'?colSeg(clientCols,'colsClients'):'')+viewSeg(viClients,'segClients'):'')+'</div>'+body;
 }
 function clientCard(c){
   var t=qClients.toLowerCase();
@@ -1940,7 +1940,7 @@ function viewScps(){
     if(fTrade && !s.trades.some(function(x){return x.trade===fTrade;}))return false;
     return scpMatches(s);
   });
-  return '<div class="dir-head"><button class="btn pri" id="addScp"><i data-lucide="plus"></i>Add SCP</button><div class="search" style="max-width:340px"><i data-lucide="search"></i><input id="qScp" placeholder="Search company, trade, region…" value="'+esc(qScp)+'"></div><select class="f" id="fTrade"><option value="">All trades</option>'+DB.trades.map(function(t){return '<option '+(fTrade===t?'selected':'')+'>'+esc(t)+'</option>';}).join('')+'</select><div class="spacer"></div>'+(DB.scps.length?colSeg(scpCols,'colsScp')+viewSeg(viScp,'segScp'):'')+'</div>'+
+  return '<div class="dir-head"><button class="btn pri" id="addScp"><i data-lucide="plus"></i>Add SCP</button><div class="search" style="max-width:340px"><i data-lucide="search"></i><input id="qScp" placeholder="Search company, trade, region…" value="'+esc(qScp)+'"></div><select class="f" id="fTrade"><option value="">All trades</option>'+DB.trades.map(function(t){return '<option '+(fTrade===t?'selected':'')+'>'+esc(t)+'</option>';}).join('')+'</select><div class="spacer"></div>'+(DB.scps.length?(viScp==='g'?colSeg(scpCols,'colsScp'):'')+viewSeg(viScp,'segScp'):'')+'</div>'+
     (list.length?'<div class="cards '+viScp+'" style="--cols:'+scpCols+'">'+list.map(scpCard).join('')+'</div>':emptyState('wrench','No supply chain partners','Add a company, rank their trades by how well they perform, and log the regions they cover and their people.','Add SCP','addScp'));
 }
 function scpCard(s){
@@ -2016,7 +2016,7 @@ var GTD_BUCKETS=[
   {key:'projects',label:'Projects',icon:'layers',sub:'Outcomes needing more than one step.'},
   {key:'someday',label:'Someday / Maybe',icon:'cloud',sub:'Not now. Revisit during weekly review.'}
 ];
-var GTD_LABEL={all:'All Open',done:'Done',scheduled:'Scheduled'}; GTD_BUCKETS.forEach(function(b){GTD_LABEL[b.key]=b.label;});
+var GTD_LABEL={all:'All Open',done:'Done',scheduled:'Deferred'}; GTD_BUCKETS.forEach(function(b){GTD_LABEL[b.key]=b.label;});
 var gtd={view:'inbox',search:'',tagFilter:null,editingId:null};
 function isDeferred(t){ return t.defer && t.defer>isoIn(0); }
 function gtdCounts(){
@@ -2050,7 +2050,7 @@ function viewTasks(){
     '<div class="lbl">Workflow</div>'+sideBtns+
     '<div class="lbl">Review</div>'+
     '<button data-gv="all" class="'+(gtd.view==='all'?'on':'')+'"><i data-lucide="list"></i>All Open<span class="gc">'+c.all+'</span></button>'+
-    '<button data-gv="scheduled" class="'+(gtd.view==='scheduled'?'on':'')+'"><i data-lucide="calendar-clock"></i>Scheduled<span class="gc">'+c.scheduled+'</span></button>'+
+    '<button data-gv="scheduled" class="'+(gtd.view==='scheduled'?'on':'')+'"><i data-lucide="calendar-clock"></i>Deferred<span class="gc">'+c.scheduled+'</span></button>'+
     '<button data-gv="done" class="'+(gtd.view==='done'?'on':'')+'"><i data-lucide="circle-check-big"></i>Done<span class="gc">'+c.done+'</span></button>'+
     '</div>'+
     '<div class="gtd-main">'+
@@ -2538,20 +2538,48 @@ function mountCoveragePicker(container,coverage,mapHeight){
     return {color:cssVar('--line'),weight:1,fillColor:selected?cssVar('--accent'):cssVar('--surface-2'),fillOpacity:selected?0.55:0.35};
   }
   function syncCoverageMap(){ if(coverageLayer)coverageLayer.setStyle(coverageStyle); }
+  function countryCountText(country){
+    var regions=allRegions().filter(function(region){ return region.country===country; });
+    var selected=regions.filter(function(region){ return isSelected(region.code); }).length;
+    return (COUNTRY_LABELS[country]||country)+' · '+selected+' of '+regions.length;
+  }
+  function updateCountryCount(country){
+    var heading=chipEl.querySelector('[data-coverage-country-count="'+country+'"]');
+    if(heading)heading.textContent=countryCountText(country);
+  }
   function renderCoverage(){
-    chipEl.innerHTML=allRegions().map(function(region){
-      var on=isSelected(region.code);
-      return '<button type="button" class="tchip" data-covtoggle="'+esc(region.code)+'" style="cursor:pointer;'+(on?'background:var(--accent-soft);color:var(--green-deep);border-color:var(--green-line)':'')+'">'+(on?'✓ ':'')+esc(region.label)+'</button>';
+    chipEl.innerHTML=activeCountries().map(function(country){
+      var regions=allRegions().filter(function(region){ return region.country===country; });
+      return '<div data-coverage-country="'+esc(country)+'" style="width:100%"><div class="sec-label" data-coverage-country-count="'+esc(country)+'" style="margin:14px 0 7px">'+esc(countryCountText(country))+'</div><div style="display:flex;flex-wrap:wrap;gap:7px">'+regions.map(function(region){
+        var on=isSelected(region.code);
+        return '<button type="button" class="tchip" data-covtoggle="'+esc(region.code)+'" aria-pressed="'+(on?'true':'false')+'" style="cursor:pointer;'+(on?'background:var(--accent-soft);color:var(--green-deep);border-color:var(--green-line)':'')+'">'+(on?'✓ ':'')+esc(region.label)+'</button>';
+      }).join('')+'</div></div>';
     }).join('');
     $$("[data-covtoggle]",chipEl).forEach(function(button){ button.addEventListener('click',function(){
       var region=allRegions().find(function(r){return r.code===button.getAttribute('data-covtoggle');});
-      if(region){ toggleRegion(region); renderCoverage(); syncCoverageMap(); }
+      if(region){
+        toggleRegion(region);
+        var on=isSelected(region.code);
+        button.setAttribute('aria-pressed',on?'true':'false');
+        button.textContent=(on?'✓ ':'')+region.label;
+        button.style.background=on?'var(--accent-soft)':'';
+        button.style.color=on?'var(--green-deep)':'';
+        button.style.borderColor=on?'var(--green-line)':'';
+        updateCountryCount(region.country);
+        syncCoverageMap();
+      }
     }); });
   }
   function fitCoverageMap(){
     if(!coverageMap||!coverageLayer)return;
-    var bounds=coverageLayer.getBounds();
-    if(bounds.isValid())coverageMap.fitBounds(bounds,{padding:[10,10]});
+    var selected=coverage.map(function(region){return region.code;}), bounds;
+    if(selected.length){
+      coverageLayer.eachLayer(function(layer){
+        if(selected.indexOf(layer.feature.properties.jbCode)>=0){ var layerBounds=layer.getBounds(); bounds=bounds?bounds.extend(layerBounds):layerBounds; }
+      });
+    }
+    bounds=bounds||coverageLayer.getBounds();
+    if(bounds.isValid())coverageMap.fitBounds(bounds,{padding:[10,10],maxZoom:coverageMap.getBoundsZoom(bounds,true)-0.3});
   }
   function onResize(){ if(coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } }
   function layerOptions(){
