@@ -801,8 +801,8 @@ var REGION_CATALOGUE={
 };
 function allRegions(){
   var out=[];
-  Object.keys(REGION_CATALOGUE).forEach(function(country){
-    REGION_CATALOGUE[country].forEach(function(r){ out.push({code:r.code,label:r.label,country:country}); });
+  activeCountries().forEach(function(country){
+    (REGION_CATALOGUE[country]||[]).forEach(function(r){ out.push({code:r.code,label:r.label,country:country}); });
   });
   return out;
 }
@@ -816,6 +816,21 @@ var BOUNDARY_SOURCES={
 var BOUNDARY_EXCLUDE={
   UK:['E92000001']
 };
+var COUNTRY_LABELS={UK:'United Kingdom',FR:'France'};
+function activeCountries(){
+  if(DB&&!DB.settings)DB.settings={};
+  var s=(DB&&DB.settings)||{};
+  if(!Array.isArray(s.coverageCountries)||!s.coverageCountries.length) s.coverageCountries=['UK'];
+  return s.coverageCountries;
+}
+function activeFeatures(){
+  var out=[];
+  activeCountries().forEach(function(c){ (LOADED_BOUNDARIES[c]||[]).forEach(function(f){ out.push(f); }); });
+  return out;
+}
+function loadActiveBoundaries(){
+  return Promise.all(activeCountries().map(function(c){ return loadBoundaries(c).catch(function(){ return []; }); })).then(activeFeatures);
+}
 
 var LOADED_BOUNDARIES={};
 function pickProp(props,tests){
@@ -2501,11 +2516,13 @@ function editScpPerson(scpId,personId){
 }
 function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function mountCoveragePicker(container,coverage,mapHeight){
-  var coverageMap=null,coverageLayer=null,active=true;
-  var mapEl,chipEl;
-  container.innerHTML='<div data-coverage-map style="height:'+mapHeight+'px;margin-bottom:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden"></div>'+
+  var coverageMap=null,coverageLayer=null,active=true,loadVersion=0;
+  var mapEl,chipEl,countryEl;
+  container.innerHTML='<div data-coverage-countries style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 10px"></div>'+
+    '<div data-coverage-map style="height:'+mapHeight+'px;margin-bottom:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden"></div>'+
     '<div style="display:flex;gap:7px;margin:0 0 9px"><button type="button" class="btn sm" data-coverage-select-all>Select all</button><button type="button" class="btn sm" data-coverage-clear-all>Clear all</button></div>'+
     '<div data-coverage-chips style="display:flex;flex-wrap:wrap;gap:7px"></div>';
+  countryEl=container.querySelector('[data-coverage-countries]');
   mapEl=container.querySelector('[data-coverage-map]');
   chipEl=container.querySelector('[data-coverage-chips]');
   function isSelected(code){ return coverage.some(function(r){return r.code===code;}); }
@@ -2531,14 +2548,11 @@ function mountCoveragePicker(container,coverage,mapHeight){
   function fitCoverageMap(){
     if(!coverageMap||!coverageLayer)return;
     var bounds=coverageLayer.getBounds();
-coverageMap.fitBounds(coverageLayer.getBounds(),{padding:[6,6],maxZoom:coverageMap.getBoundsZoom(coverageLayer.getBounds(),true)-0.3})  }
+    if(bounds.isValid())coverageMap.fitBounds(bounds,{padding:[10,10]});
+  }
   function onResize(){ if(coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } }
-  function initMap(){
-    try{
-      window.jbBoundaries.load('UK').then(function(features){
-        if(!active||!mapEl.isConnected)return;
-        coverageMap=L.map(mapEl,{scrollWheelZoom:false,attributionControl:false,zoomSnap:0});
-        coverageLayer=L.geoJSON({type:'FeatureCollection',features:features},{
+  function layerOptions(){
+    return {
           style:coverageStyle,
           onEachFeature:function(feature,layer){
             var p=feature.properties;
@@ -2549,12 +2563,46 @@ coverageMap.fitBounds(coverageLayer.getBounds(),{padding:[6,6],maxZoom:coverageM
               mouseout:function(){ layer.setStyle(coverageStyle(feature)); }
             });
           }
-        }).addTo(coverageMap);
-        coverageMap.invalidateSize();
-        fitCoverageMap();
-        window.addEventListener('resize',onResize);
-        setTimeout(function(){ if(active&&coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } },250);
-      }).catch(function(){ mapEl.style.display='none'; });
+        };
+  }
+  function rebuildMap(features){
+    if(!coverageMap)return;
+    if(coverageLayer){ coverageMap.removeLayer(coverageLayer); coverageLayer=null; }
+    if(!features.length){ mapEl.style.display='none'; return; }
+    mapEl.style.display='';
+    coverageLayer=L.geoJSON({type:'FeatureCollection',features:features},layerOptions()).addTo(coverageMap);
+    coverageMap.invalidateSize();
+    fitCoverageMap();
+    setTimeout(function(){ if(active&&coverageMap){ coverageMap.invalidateSize(); fitCoverageMap(); } },250);
+  }
+  function loadMap(){
+    var version=++loadVersion;
+    try{
+      loadActiveBoundaries().then(function(features){ if(active&&version===loadVersion){ renderCoverage(); rebuildMap(features); } }).catch(function(){ if(active&&version===loadVersion)mapEl.style.display='none'; });
+    }catch(err){ mapEl.style.display='none'; }
+  }
+  function renderCountries(){
+    var countries=activeCountries();
+    var available=Object.keys(BOUNDARY_SOURCES).filter(function(country){ return countries.indexOf(country)<0; });
+    countryEl.innerHTML=countries.map(function(country){
+      return '<span class="tchip" style="display:inline-flex;align-items:center;gap:5px">'+esc(COUNTRY_LABELS[country]||country)+'<button type="button" data-remove-country="'+esc(country)+'" title="Remove '+esc(COUNTRY_LABELS[country]||country)+'" '+(countries.length===1?'disabled':'')+'>×</button></span>';
+    }).join('')+'<select class="f" data-add-country style="width:auto;padding:6px 9px;font-size:0.78rem"><option value="">Add a country</option>'+available.map(function(country){ return '<option value="'+esc(country)+'">'+esc(COUNTRY_LABELS[country]||country)+'</option>'; }).join('')+'</select>';
+    $$('[data-remove-country]',countryEl).forEach(function(button){ button.addEventListener('click',function(){
+      var country=button.getAttribute('data-remove-country'),current=activeCountries();
+      if(current.length<=1)return;
+      var i=current.indexOf(country); if(i<0)return;
+      current.splice(i,1); save(); renderCountries(); renderCoverage(); loadMap();
+    }); });
+    countryEl.querySelector('[data-add-country]').addEventListener('change',function(){
+      var country=this.value,current=activeCountries(); if(!country||current.indexOf(country)>=0)return;
+      current.push(country); save(); renderCountries(); renderCoverage(); loadMap();
+    });
+  }
+  function initMap(){
+    try{
+      coverageMap=L.map(mapEl,{scrollWheelZoom:false,attributionControl:false,zoomSnap:0});
+      window.addEventListener('resize',onResize);
+      loadActiveBoundaries().then(function(features){ if(active){ renderCoverage(); rebuildMap(features); } }).catch(function(){ mapEl.style.display='none'; });
     }catch(err){ mapEl.style.display='none'; }
   }
   container.querySelector('[data-coverage-select-all]').addEventListener('click',function(){
@@ -2562,7 +2610,7 @@ coverageMap.fitBounds(coverageLayer.getBounds(),{padding:[6,6],maxZoom:coverageM
     renderCoverage(); syncCoverageMap();
   });
   container.querySelector('[data-coverage-clear-all]').addEventListener('click',function(){ coverage.splice(0,coverage.length); renderCoverage(); syncCoverageMap(); });
-  renderCoverage(); initMap();
+  renderCountries(); renderCoverage(); initMap();
   return {destroy:function(){ active=false; window.removeEventListener('resize',onResize); if(coverageMap){ coverageMap.remove(); coverageMap=null; } }};
 }
 function editScp(id){
