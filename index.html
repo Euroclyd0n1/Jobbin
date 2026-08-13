@@ -1194,13 +1194,15 @@ function composerHtml(id){
       '<button type="button" class="tb-btn" data-cmd="insertUnorderedList" title="Bullet list"><i data-lucide="list"></i></button>'+
       '<button type="button" class="tb-btn" data-cmd="insertOrderedList" title="Numbered list"><i data-lucide="list-ordered"></i></button>'+
       '<button type="button" class="tb-btn" data-attach title="Attach files"><i data-lucide="paperclip"></i></button>'+
-      '<input type="file" multiple class="composer-file" style="display:none">'+
+       '<input type="file" multiple class="composer-file" style="display:none">'+
+      '<span class="tb-sep"></span>'+
+      '<button type="button" class="tb-btn'+(getPref('showEvents',true)!==false?' on':'')+'" data-evtoggle title="Show or hide activity"><i data-lucide="'+(getPref('showEvents',true)!==false?'eye':'eye-off')+'"></i></button>'+
     '</div>'+
     '<div class="composer-editor" contenteditable="true" data-ph="Add an update…"></div>'+
     '<div class="composer-foot"><div class="composer-files"></div><span class="composer-hint">⌘/Ctrl + Enter</span><button class="btn pri" type="button" data-send><i data-lucide="send"></i>Add</button></div>'+
   '</div>';
 }
-function bindComposer(boxSel,onSend){
+function bindComposer(boxSel,onSend,refresh){
   var box=$(boxSel); if(!box)return;
   var type='note', pend=[];
   var editor=box.querySelector('.composer-editor');
@@ -1221,6 +1223,11 @@ function bindComposer(boxSel,onSend){
     $$('[data-rmf]',pendWrap).forEach(function(b){ b.addEventListener('click',function(){ pend.splice(+b.getAttribute('data-rmf'),1); renderPend(); }); });
   }
   box.querySelector('[data-attach]').addEventListener('click',function(){ fileInput.click(); });
+  var evBtn=box.querySelector('[data-evtoggle]');
+  if(evBtn) evBtn.addEventListener('click',function(){
+    setPref('showEvents', getPref('showEvents',true)===false);
+    if(refresh) refresh();
+  });
   fileInput.addEventListener('change',function(){
     Array.prototype.slice.call(fileInput.files).forEach(function(f){
       idbPutFile(f).then(function(ref){ pend.push(ref); renderPend(); calcFileBytes().then(function(){ var sm=$('#storageMeterWrap'); if(sm)renderStorageMeter(sm); }); }).catch(function(){ toast('File could not be saved. Try a smaller file.'); });
@@ -2447,7 +2454,7 @@ function openJob(id){
   });
   if(!isNew){
     var tl=$('#jTimeline'); var refresh=function(){ tl.innerHTML=timelineHtml(r); icons(); bindAttachmentLinks(tl); bindTimeline(r,tl,refresh); };
-    bindComposer('#jcComposer',function(type,html,text,files){ addComment(r,type,html,text,files,function(){ refresh(); }); });
+    bindComposer('#jcComposer',function(type,html,text,files){ addComment(r,type,html,text,files,function(){ refresh(); }); }, refresh);
     bindTimeline(r,tl,refresh); bindAttachmentLinks(tl);
   }
 }
@@ -2463,7 +2470,7 @@ function openDrawer(id){
   $('#drClose').addEventListener('click',function(){ $('#sideScrim').classList.remove('show'); d.classList.remove('show'); });
   var tl=$('#drTimeline');
   var refresh=function(){ tl.innerHTML=timelineHtml(r); icons(); bindAttachmentLinks(tl); bindTimeline(r,tl,refresh); };
-  bindComposer('#drComposer',function(type,html,text,files){ addComment(r,type,html,text,files,function(){ refresh(); refreshOverviewRow(r.id); }); });
+  bindComposer('#drComposer',function(type,html,text,files){ addComment(r,type,html,text,files,function(){ refresh(); refreshOverviewRow(r.id); }); }, refresh);
   bindTimeline(r,tl,refresh); bindAttachmentLinks(tl);
 }
 function addComment(r,type,html,text,files,after){
@@ -2486,19 +2493,40 @@ function attHtml(atts){
   }).join('')+'</div>';
 }
 function timelineHtml(r){
-  var cs=(r.comments||[]); cs.forEach(function(c){ if(!c.id)c.id=uid(); });
-  var sorted=cs.slice().sort(function(a,b){ var pd=(b.pinned?1:0)-(a.pinned?1:0); if(pd)return pd; return b.t-a.t; });
-  if(!sorted.length) return '<div style="font-size:13px;color:var(--ink-3)">No updates yet.</div>';
-  return sorted.map(function(c){
-    var ty=c.type||'note';
-    var body=c.html?c.html:esc(c.txt||'');
-    var tasked=c.taskId && taskById(c.taskId);
-    return '<div class="tl-item'+(c.pinned?' pin':'')+'" data-cid="'+c.id+'">'+
-      '<div class="tl-ic" data-ty="'+ty+'"><i data-lucide="'+(TYPE_IC[ty]||'message-square')+'"></i></div>'+
-      '<div class="tl-main"><div class="tl-meta"><span class="mtxt"><span class="tl-type">'+esc(ty)+'</span> · '+esc(c.by||'You')+' · '+relTime(c.t)+(c.edited?'<span class="tl-edited">edited</span>':'')+'</span>'+
-      '<span class="tl-acts"><button class="icon-btn'+(tasked?' tasked':'')+'" data-mktask="'+c.id+'" title="'+(tasked?'Task created from this update':'Create a task from this update')+'"><i data-lucide="list-plus"></i></button><button class="icon-btn'+(c.pinned?' pinned':'')+'" data-pin="'+c.id+'" title="'+(c.pinned?'Unpin':'Pin')+'"><i data-lucide="pin"></i></button><button class="icon-btn" data-cedit="'+c.id+'" title="Edit"><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-cdel="'+c.id+'" title="Delete"><i data-lucide="trash-2"></i></button></span></div>'+
-      '<div class="tl-txt" data-ctxt="'+c.id+'">'+body+'</div>'+attHtml(c.attachments)+(tasked?'<div class="tl-tasklink"><i data-lucide="circle-check-big"></i>Task created</div>':'')+'</div></div>';
-  }).join('');
+  var items=[];
+  (r.comments||[]).forEach(function(c){ if(!c.id)c.id=uid(); items.push({kind:'comment',t:c.t,pinned:!!c.pinned,rec:c}); });
+  if(getPref('showEvents',true)!==false){
+    (r.events||[]).forEach(function(e){ if(!e.id)e.id='e'+uid(); items.push({kind:'event',t:e.t,pinned:false,rec:e}); });
+  }
+  items.sort(function(a,b){ var pd=(b.pinned?1:0)-(a.pinned?1:0); if(pd)return pd; return b.t-a.t; });
+  if(!items.length) return '<div style="font-size:13px;color:var(--ink-3)">No updates yet.</div>';
+  var out=[];
+  for(var i=0;i<items.length;i++){
+    var item=items[i];
+    if(item.kind==='comment'){
+      var c=item.rec;
+      var ty=c.type||'note';
+      var body=c.html?c.html:esc(c.txt||'');
+      var tasked=c.taskId && taskById(c.taskId);
+      out.push('<div class="tl-item'+(c.pinned?' pin':'')+'" data-cid="'+c.id+'">'+
+        '<div class="tl-ic" data-ty="'+ty+'"><i data-lucide="'+(TYPE_IC[ty]||'message-square')+'"></i></div>'+
+        '<div class="tl-main"><div class="tl-meta"><span class="mtxt"><span class="tl-type">'+esc(ty)+'</span> · '+esc(c.by||'You')+' · '+relTime(c.t)+(c.edited?'<span class="tl-edited">edited</span>':'')+'</span>'+
+        '<span class="tl-acts"><button class="icon-btn'+(tasked?' tasked':'')+'" data-mktask="'+c.id+'" title="'+(tasked?'Task created from this update':'Create a task from this update')+'"><i data-lucide="list-plus"></i></button><button class="icon-btn'+(c.pinned?' pinned':'')+'" data-pin="'+c.id+'" title="'+(c.pinned?'Unpin':'Pin')+'"><i data-lucide="pin"></i></button><button class="icon-btn" data-cedit="'+c.id+'" title="Edit"><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-cdel="'+c.id+'" title="Delete"><i data-lucide="trash-2"></i></button></span></div>'+
+        '<div class="tl-txt" data-ctxt="'+c.id+'">'+body+'</div>'+attHtml(c.attachments)+(tasked?'<div class="tl-tasklink"><i data-lucide="circle-check-big"></i>Task created</div>':'')+'</div></div>');
+      continue;
+    }
+    var who=item.by||'You';
+    var lines=[];
+    while(i<items.length && items[i].kind==='event' && (items[i].by||'You')===who){
+      var e=items[i].rec;
+      var what = e.cat ? (e.res ? esc(e.cat)+': '+esc(e.res) : esc(e.cat)) : '';
+      lines.push('<li class="ev-line"><span class="ev-what">'+what+'</span><span class="ev-when">'+evTime(e.t)+'</span></li>');
+      i++;
+    }
+    out.push('<div class="ev-run"><div class="ev-who">'+esc(who)+'</div><ul>'+lines.join('')+'</ul></div>');
+    i--;
+  }
+  return out.join('');
 }
 function findComment(r,id){ return (r.comments||[]).find(function(c){return c.id===id;}); }
 function bindTimeline(r,tl,refreshAll){
