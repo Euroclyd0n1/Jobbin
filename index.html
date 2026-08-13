@@ -979,6 +979,10 @@ function uid(){ return Math.random().toString(36).slice(2,10); }
 function logEvent(rec,cat,res){
   if(!rec) return;
   if(!Array.isArray(rec.events)) rec.events=[];
+  var last=rec.events[rec.events.length-1];
+  if(last && last.cat===cat && last.by===currentUser().name && (Date.now()-last.t)<120000){
+    last.res=(res==null?'':String(res)); last.t=Date.now(); return;
+  }
   rec.events.push({id:'e'+uid(),t:Date.now(),by:currentUser().name,cat:cat,res:(res==null?'':String(res))});
 }
 /* Relative up to 7 days, then a short date. Never "12d ago". */
@@ -1225,7 +1229,11 @@ function bindComposer(boxSel,onSend,refresh){
   box.querySelector('[data-attach]').addEventListener('click',function(){ fileInput.click(); });
   var evBtn=box.querySelector('[data-evtoggle]');
   if(evBtn) evBtn.addEventListener('click',function(){
-    setPref('showEvents', getPref('showEvents',true)===false);
+    var on=getPref('showEvents',true)===false;
+    setPref('showEvents', on);
+    evBtn.classList.toggle('on',on);
+    evBtn.innerHTML='<i data-lucide="'+(on?'eye':'eye-off')+'"></i>';
+    icons();
     if(refresh) refresh();
   });
   fileInput.addEventListener('change',function(){
@@ -1907,19 +1915,30 @@ function rowHtml(r){
 function startEdit(td){
   if(td.querySelector('input,select'))return;
   var id=rowIdOf(td),f=td.dataset.f,rec=workById(id),cur=rec[f]==null?'':rec[f];
-  if(f==='client'){ openCellDropdown(td,[''].concat(clientNames()),cur,function(v){ rec.client=v; rec.site=''; save(); render(); }); return; }
-  if(f==='site'){ if(!rec.client){ toast('Pick a client first'); return; } openCellDropdown(td,[''].concat(sitesForClient(rec.client)),cur,function(v){ rec.site=v; save(); render(); }); return; }
+  if(f==='client'){ openCellDropdown(td,[''].concat(clientNames()),cur,function(v){ if(v!==rec.client){ rec.client=v; rec.site=''; logEvent(rec,'Client', v||''); } save(); render(); }); return; }
+  if(f==='site'){ if(!rec.client){ toast('Pick a client first'); return; } openCellDropdown(td,[''].concat(sitesForClient(rec.client)),cur,function(v){ if(v!==rec.site){ rec.site=v; logEvent(rec,'Site', v||''); } save(); render(); }); return; }
   var el;
   if(f==='dueDate'||f==='dateReceived'){ el=document.createElement('input'); el.type='date'; el.value=cur; }
   else if(f==='value'){ el=document.createElement('input'); el.type='number'; el.step='0.01'; el.value=cur; }
   else { el=document.createElement('input'); el.value=cur; }
   el.className='cell-input'; td.innerHTML=''; td.appendChild(el); el.focus(); if(el.select)try{el.select();}catch(e){}
   try{ if(el.type==='date' && el.showPicker) el.showPicker(); }catch(e){}
-  var commit=function(){ rec[f]=f==='value'?(el.value===''?'':+el.value):el.value; save(); render(); };
+  var commit=function(){
+    var prev=rec[f];
+    rec[f]=f==='value'?(el.value===''?'':+el.value):el.value;
+    if(rec[f]!==prev){
+      if(f==='value') logEvent(rec,'Value', money(rec.value));
+      else if(f==='dueDate') logEvent(rec,'Due date', fmtDate(rec.dueDate));
+      else if(f==='supplier') logEvent(rec,'Supplier', rec.supplier||'');
+      else if(f==='nextAction') logEvent(rec,'Next action', rec.nextAction||'');
+      else if(f==='stageOwner') logEvent(rec,'Stage owner', rec.stageOwner||'');
+    }
+    save(); render();
+  };
   el.addEventListener('blur',commit,{once:true});
   el.addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();el.blur();} if(e.key==='Escape'){el.removeEventListener('blur',commit);render();} });
 }
-function cycleStatus(pill){ var rec=workById(rowIdOf(pill)); var i=STATUSES.findIndex(function(s){return s.name===rec.status;}); rec.status=STATUSES[(i+1)%STATUSES.length].name; save(); render(); }
+function cycleStatus(pill){ var rec=workById(rowIdOf(pill)); var i=STATUSES.findIndex(function(s){return s.name===rec.status;}); var prev=rec.status; rec.status=STATUSES[(i+1)%STATUSES.length].name; if(rec.status!==prev) logEvent(rec,'Status', rec.status); save(); render(); }
 function delWork(id){ var r=workById(id); confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed from this device.',function(){ DB.works=DB.works.filter(function(x){return x.id!==id;}); save(); render(); toast('Work deleted'); }); }
 var viInternal='g', internalCols=3;
 function viewInternal(){
@@ -2178,7 +2197,7 @@ function makeTaskFromComment(work,comment){
   var title=raw.length>90?raw.slice(0,87)+'…':raw;
   var tag=(work.client||'').toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,20);
   var task={id:'t'+uid(),title:title,notes:(raw.length>90?raw:''),bucket:'next',tags:tag?[tag]:[],context:'',project:'',waitingOn:'',due:'',defer:'',chase:'',linkedWorkId:work.id,done:false,created:Date.now(),doneAt:null,source:{type:'comment',workId:work.id,commentId:comment.id,wqRef:work.wqRef||''}};
-  DB.tasks.unshift(task); comment.taskId=task.id; save(); updateNavCounts(); toast('Task created in Next Actions');
+  DB.tasks.unshift(task); comment.taskId=task.id; logEvent(work,'Task created', title); save(); updateNavCounts(); toast('Task created in Next Actions');
 }
 var gtdEditTags=[];
 function gtdOpenEditor(id){
@@ -2445,11 +2464,22 @@ function openJob(id){
   $('#jCancel').addEventListener('click',function(){ closeScrimModal('jobScrim','jobModal'); });
   if(!isNew){ var jd=$('#jDelete'); if(jd)jd.addEventListener('click',function(){ confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed.',function(){ DB.works=DB.works.filter(function(x){return x.id!==r.id;}); save(); closeScrimModal('jobScrim','jobModal'); render(); toast('Work deleted'); }); }); }
   $('#jSave').addEventListener('click',function(){
+      var prevStatus=r.status, prevDue=r.dueDate, prevValue=r.value, prevClient=r.client, prevSite=r.site, prevSupplier=r.supplier, prevNext=r.nextAction, prevStage=r.stageOwner;
     r.wqRef=$('#jWq').value.trim(); r.value=$('#jVal').value===''?'':+$('#jVal').value;
     r.client=$('#jClient').value; r.site=$('#jSite').value; r.supplier=$('#jSup').value; r.status=$('#jStatus').value;
     r.description=$('#jDesc').value.trim(); r.stageOwner=$('#jStage').value.trim(); r.actionOwner=$('#jAction').value.trim();
     r.nextAction=$('#jNext').value.trim(); r.dueDate=$('#jDue').value; r.dateReceived=$('#jRec').value; r.summary=$('#jSum').value.trim();
-    if(isNew)DB.works.unshift(r);
+    if(isNew){ DB.works.unshift(r); logEvent(r,'Job created',''); }
+    else {
+      if(r.status!==prevStatus) logEvent(r,'Status', r.status);
+      if(r.dueDate!==prevDue) logEvent(r,'Due date', fmtDate(r.dueDate));
+      if(String(r.value)!==String(prevValue)) logEvent(r,'Value', money(r.value));
+      if(r.client!==prevClient) logEvent(r,'Client', r.client||'');
+      if(r.site!==prevSite) logEvent(r,'Site', r.site||'');
+      if(r.supplier!==prevSupplier) logEvent(r,'Supplier', r.supplier||'');
+      if(r.nextAction!==prevNext) logEvent(r,'Next action', r.nextAction||'');
+      if(r.stageOwner!==prevStage) logEvent(r,'Stage owner', r.stageOwner||'');
+    }
     save(); closeScrimModal('jobScrim','jobModal'); render(); toast(isNew?'Work added':'Work saved');
   });
   if(!isNew){
@@ -2515,9 +2545,9 @@ function timelineHtml(r){
         '<div class="tl-txt" data-ctxt="'+c.id+'">'+body+'</div>'+attHtml(c.attachments)+(tasked?'<div class="tl-tasklink"><i data-lucide="circle-check-big"></i>Task created</div>':'')+'</div></div>');
       continue;
     }
-    var who=item.by||'You';
+    var who=(item.rec&&item.rec.by)||'You';
     var lines=[];
-    while(i<items.length && items[i].kind==='event' && (items[i].by||'You')===who){
+   while(i<items.length && items[i].kind==='event' && ((items[i].rec&&items[i].rec.by)||'You')===who){
       var e=items[i].rec;
       var what = e.cat ? (e.res ? esc(e.cat)+': '+esc(e.res) : esc(e.cat)) : '';
       lines.push('<li class="ev-line"><span class="ev-what">'+what+'</span><span class="ev-when">'+evTime(e.t)+'</span></li>');
