@@ -45,11 +45,14 @@ Specifically:
 
 ## Storage and migrations
 
-- Register and attachments live in **IndexedDB**, database `ewt.files.v1`.
-- Legacy `localStorage` key `ewt.v1` auto-migrates on load.
+- Register and attachments live in **IndexedDB**, database `jbn.files.v1`.
+- Renamed from `ewt.files.v1` on 16 Aug 2026 (the old Extra Works Tracker prefix). Do not reintroduce `ewt` anywhere.
+- The `KEY` constant (`jbn.v1`) is a legacy `localStorage` read left over from pre-v31 builds. Nothing writes it, so it always returns null and boot falls through to IndexedDB. It is dead but harmless, and is slated for removal along with `lsGet` and `migrateLegacyAttachments`.
 - A **schema-version constant + ordered migration runner** shipped in v31.4.
 
 If a change reshapes persisted data you MUST: (1) write a new ordered migration step, and (2) increment the schema-version constant. Shipping a data-shape change without registering its upgrade step breaks existing data and Drive backups on load.
+
+Note that the migration runner reshapes the data object **after** it has been loaded. It does not and cannot rename the database the object came out of. Renaming an IndexedDB database is a separate copy-then-delete job, not a schema step.
 
 ## Google Drive backup / OAuth
 
@@ -60,6 +63,8 @@ python3 -m http.server 8000
 ```
 
 and add `http://localhost:8000` as an authorised origin.
+
+The Drive backup filename is `jobbin-tracker.json`, independent of the IndexedDB database name.
 
 Do not remove or relocate the Google OAuth script or the lucide icons path. Both have been broken before by well-meaning cleanup.
 
