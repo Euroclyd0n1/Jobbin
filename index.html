@@ -251,7 +251,6 @@ thead th{ text-align:left; font-size:0.72rem; font-weight:700; text-transform:up
   letter-spacing:inherit;
   white-space:nowrap;
 }
-
 .board-head i,
 .board-head svg{
   width:13px;
@@ -917,7 +916,7 @@ var avc=function(n){ return AVCOL[[].reduce.call(n||'',function(a,c){return a+c.
 var fmtDate=function(d){ return d?new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—'; };
 var relTime=function(t){ var m=(Date.now()-t)/60000; if(m<1)return'just now'; if(m<60)return Math.floor(m)+'m ago'; if(m<1440)return Math.floor(m/60)+'h ago'; return Math.floor(m/1440)+'d ago'; };
 function strip(html){ var d=document.createElement('div'); d.innerHTML=html||''; return d.textContent||''; }
-function workLabel(w){ return [w.wqRef||'Job',w.client,w.site].filter(Boolean).join(' · '); }
+function workLabel(w){ return [w.wqRef||'Job',jobClient(w),jobSite(w)].filter(Boolean).join(' · '); }
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 /* ---- IndexedDB: files store (attachments) + state store (register) ---- */
 function idbOpen(){return new Promise(function(resolve,reject){var req=indexedDB.open(FILE_DB,DB_VERSION);req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains(FILE_STORE))db.createObjectStore(FILE_STORE,{keyPath:'id'});if(!db.objectStoreNames.contains(STATE_STORE))db.createObjectStore(STATE_STORE);};req.onsuccess=function(){resolve(req.result);};req.onerror=function(){reject(req.error);};});}
@@ -1083,7 +1082,9 @@ function seed(){
     {id:'t'+uid(),title:'Apex parts ETA for Andromeda AHU motor',notes:'',bucket:'waiting',tags:['vega'],context:'',project:'',waitingOn:'Dave Mills (Apex)',due:'',defer:'',chase:isoIn(0),linkedWorkId:wid('JBN-10421'),done:false,created:Date.now()-86400000,doneAt:null},
     {id:'t'+uid(),title:'Idea: auto-pull site addresses into a tracker map view',notes:'Could geocode the Vega Care Group address list.',bucket:'someday',tags:['tracker','idea'],context:'',project:'Jobbin',waitingOn:'',due:'',defer:isoIn(30),chase:'',linkedWorkId:''  ,done:false,created:Date.now()-86400000*5,doneAt:null}
   ];
-  return d;
+  /* Sample data is written with names, then linked by the migration runner,
+     so a reset produces exactly the same shape as an upgraded register. */
+  return runMigrations(d);
 }
 function icons(){ try{ if(window.lucide) window.lucide.createIcons(); }catch(e){} }
 function toast(msg){ var w=$('#toasts'); if(!w)return; var t=document.createElement('div'); t.className='toast'; t.innerHTML='<i data-lucide="circle-check-big"></i>'+esc(msg); w.appendChild(t); icons(); setTimeout(function(){t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(function(){t.remove();},300);},2600); }
@@ -1306,11 +1307,17 @@ function bindComposer(boxSel,onSend,refresh){
 }
 function clientNames(){ return DB.clients.map(function(c){return c.name;}); }
 function sitesForClient(name){ var c=DB.clients.find(function(x){return x.name===name;}); if(!c)return[]; var out=[]; c.managers.forEach(function(m){ m.sites.forEach(function(s){ if(out.indexOf(s.name)<0)out.push(s.name); }); }); return out; }
-function buildClientSelect(sel,val){ var names=clientNames().slice(); if(val&&names.indexOf(val)<0)names.unshift(val); sel.innerHTML='<option value="">'+(names.length?'— Select client —':'No clients yet')+'</option>'+names.map(function(n){return '<option '+(n===val?'selected':'')+'>'+esc(n)+'</option>';}).join(''); }
-function buildSiteSelect(sel,clientName,val){ var sites=sitesForClient(clientName).slice(); if(val&&sites.indexOf(val)<0)sites.unshift(val); var ph=!clientName?'Pick a client first':(sites.length?'— Select site —':'No sites for this client'); sel.innerHTML='<option value="">'+ph+'</option>'+sites.map(function(n){return '<option '+(n===val?'selected':'')+'>'+esc(n)+'</option>';}).join(''); sel.disabled=!clientName; }
+/* Pickers write permanent IDs. Only BAU records are offered, but whatever this
+   job already references stays selectable so historical jobs still render. */
+function offeredClients(keepId){ return (DB.clients||[]).filter(function(c){ return isOffered(c)||c.id===keepId; }); }
+function offeredSitesFor(clientId,keepId){ var out=[],c=clientId?clientById(clientId):null; if(!c)return out; (c.managers||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ if(isOffered(s)||s.id===keepId) out.push(s); }); }); return out; }
+function offeredScps(keepId){ return (DB.scps||[]).filter(function(p){ return isOffered(p)||p.id===keepId; }); }
+function optList(items,valKey,labKey,cur){ return items.map(function(x){ return '<option value="'+esc(x[valKey])+'"'+(x[valKey]===cur?' selected':'')+'>'+esc(x[labKey])+'</option>'; }).join(''); }
+function buildClientSelect(sel,clientId){ var list=offeredClients(clientId); sel.innerHTML='<option value="">'+(list.length?'— Select client —':'No clients yet')+'</option>'+optList(list,'id','name',clientId||''); }
+function buildSiteSelect(sel,clientId,siteId){ var list=offeredSitesFor(clientId,siteId); var ph=!clientId?'Pick a client first':(list.length?'— Select site —':'No sites for this client'); sel.innerHTML='<option value="">'+ph+'</option>'+optList(list,'id','name',siteId||''); sel.disabled=!clientId; }
 function statsBy(fn){ var js=DB.works.filter(fn); var open=js.filter(function(j){return CLOSED.indexOf(j.status)<0;}); var closed=js.filter(function(j){return CLOSED.indexOf(j.status)>=0;}); return {open:open.length,openVal:open.reduce(function(a,j){return a+(+j.value||0);},0),closed:closed.length,closedVal:closed.reduce(function(a,j){return a+(+j.value||0);},0)}; }
-function jobStatsFor(name){ return statsBy(function(w){return w.client===name;}); }
-function scpStatsFor(co){ return statsBy(function(w){return w.supplier===co;}); }
+function jobStatsFor(name){ return statsBy(function(w){return jobClient(w)===name;}); }
+function scpStatsFor(co){ return statsBy(function(w){return jobSupplier(w)===co;}); }
 function openScrimModal(scrim,modal){ $('#'+scrim).classList.add('show'); $('#'+modal).classList.add('show'); }
 function closeScrimModal(scrim,modal){ $('#'+scrim).classList.remove('show'); $('#'+modal).classList.remove('show'); }
 var _confCb=null;
@@ -1459,7 +1466,12 @@ var  overdue=items.filter(function(it){return  it.over;}).length;
 }
 var q='';
 function filteredRows(){
-  var rows=DB.works.slice();
+  /* Display copies: the three linked fields carry the CURRENT name resolved
+     from its record, so search, filters and sort all read live values.
+     Edits still write IDs to the real record via workById. */
+  var rows=(DB.works||[]).map(function(w){
+    return Object.assign({},w,{client:jobClient(w),site:jobSite(w),supplier:jobSupplier(w)});
+  });
   var searchText=q.trim().toLowerCase();
 
   if(boardFilters.hideCompleted && !searchText){
@@ -1966,8 +1978,9 @@ function rowHtml(r){
 function startEdit(td){
   if(td.querySelector('input,select'))return;
   var id=rowIdOf(td),f=td.dataset.f,rec=workById(id),cur=rec[f]==null?'':rec[f];
-  if(f==='client'){ openCellDropdown(td,[''].concat(clientNames()),cur,function(v){ if(v!==rec.client){ rec.client=v; rec.site=''; logEvent(rec,'Client', v||''); } save(); render(); }); return; }
-  if(f==='site'){ if(!rec.client){ toast('Pick a client first'); return; } openCellDropdown(td,[''].concat(sitesForClient(rec.client)),cur,function(v){ if(v!==rec.site){ rec.site=v; logEvent(rec,'Site', v||''); } save(); render(); }); return; }
+  if(f==='client'){ openCellDropdown(td,[''].concat(offeredClients(rec.clientId).map(function(c){return {value:c.id,label:c.name};})),rec.clientId||'',function(v){ if(v!==rec.clientId){ rec.clientId=v; rec.client=''; rec.siteId=''; rec.site=''; logEvent(rec,'Client', jobClient(rec)); } save(); render(); }); return; }
+  if(f==='site'){ if(!rec.clientId){ toast('Pick a client first'); return; } openCellDropdown(td,[''].concat(offeredSitesFor(rec.clientId,rec.siteId).map(function(s){return {value:s.id,label:s.name};})),rec.siteId||'',function(v){ if(v!==rec.siteId){ rec.siteId=v; rec.site=''; logEvent(rec,'Site', jobSite(rec)); } save(); render(); }); return; }
+  if(f==='supplier'){ openCellDropdown(td,[''].concat(offeredScps(rec.supplierId).map(function(p){return {value:p.id,label:p.company};})),rec.supplierId||'',function(v){ if(v!==rec.supplierId){ rec.supplierId=v; rec.supplier=''; logEvent(rec,'Supplier', jobSupplier(rec)); } save(); render(); }); return; }
   var el;
   if(f==='dueDate'||f==='dateReceived'){ el=document.createElement('input'); el.type='date'; el.value=cur; }
   else if(f==='value'){ el=document.createElement('input'); el.type='number'; el.step='0.01'; el.value=cur; }
@@ -2474,7 +2487,7 @@ function exportCSV(){
     var cols=[['wqRef','Job Ref'],['client','Client'],['site','Site'],['description','Description'],['supplier','Supplier'],['value','Value (£)'],['status','Status'],['stageOwner','Stage Owner'],['actionOwner','Action Owner'],['nextAction','Next Action'],['dueDate','Due Date'],['dateReceived','Date Received'],['summary','Summary']];
     var qq=function(v){ v=(v==null?'':String(v)); return '"'+v.replace(/"/g,'""')+'"'; };
     var lines=[cols.map(function(c){return qq(c[1]);}).join(',')];
-    DB.works.forEach(function(r){ lines.push(cols.map(function(c){return qq(r[c[0]]);}).join(',')); });
+    DB.works.forEach(function(w){ var r=Object.assign({},w,{client:jobClient(w),site:jobSite(w),supplier:jobSupplier(w)}); lines.push(cols.map(function(c){return qq(r[c[0]]);}).join(',')); });
     var csv='\ufeff'+lines.join('\r\n');
     var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
@@ -2491,14 +2504,14 @@ function importBackup(e){
 }
 function openJob(id){
   var isNew=!id;
-  var r=isNew?{id:uid(),wqRef:'',client:'',site:'',description:'',supplier:'',value:'',status:'Enquiry',stageOwner:'',actionOwner:'',nextAction:'',dueDate:'',dateReceived:isoIn(0),summary:'',comments:[],files:[]}:workById(id);
+  var r=isNew?{id:uid(),wqRef:'',clientId:'',siteId:'',supplierId:'',client:'',site:'',description:'',supplier:'',value:'',status:'Enquiry',stageOwner:'',actionOwner:'',nextAction:'',dueDate:'',dateReceived:isoIn(0),summary:'',comments:[],files:[],events:[]}:workById(id);
   if(!r)return;
   var m=$('#jobModal');
   m.innerHTML='<div class="modal-head"><h2>'+(isNew?'New work':esc(r.wqRef||'Work'))+'</h2><button class="icon-btn" id="jobClose"><i data-lucide="x"></i></button></div>'+
     '<div class="modal-body">'+
     '<div class="grid-2"><div class="field"><label>Job Ref</label><input id="jWq" value="'+esc(r.wqRef||'')+'" placeholder="Job-…"></div><div class="field"><label>Value (£)</label><input id="jVal" type="number" step="0.01" value="'+(r.value===''||r.value==null?'':r.value)+'"></div></div>'+
     '<div class="grid-2"><div class="field"><label>Client</label><select id="jClient"></select></div><div class="field"><label>Site</label><select id="jSite"></select></div></div>'+
-    '<div class="grid-2"><div class="field"><label>Supplier / SCP</label><select id="jSup"><option value="">— Select supplier —</option>'+DB.scps.map(function(s){return '<option '+(r.supplier===s.company?'selected':'')+'>'+esc(s.company)+'</option>';}).join('')+'</select></div><div class="field"><label>Status</label><select id="jStatus">'+STATUSES.map(function(s){return '<option '+(r.status===s.name?'selected':'')+'>'+s.name+'</option>';}).join('')+'</select></div></div>'+
+    '<div class="grid-2"><div class="field"><label>Supplier / SCP</label><select id="jSup"><option value="">— Select supplier —</option>'+optList(offeredScps(r.supplierId),'id','company',r.supplierId||'')+'</select></div><div class="field"><label>Status</label><select id="jStatus">'+STATUSES.map(function(s){return '<option '+(r.status===s.name?'selected':'')+'>'+s.name+'</option>';}).join('')+'</select></div></div>'+
     '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
     '<div class="grid-2"><div class="field"><label>Stage owner</label><input id="jStage" value="'+esc(r.stageOwner||'')+'"></div><div class="field"><label>Action owner</label><input id="jAction" value="'+esc(r.actionOwner||'')+'"></div></div>'+
     '<div class="field"><label>Next action</label><input id="jNext" value="'+esc(r.nextAction||'')+'"></div>'+
@@ -2507,17 +2520,18 @@ function openJob(id){
     (isNew?'':'<div class="tl-head"><h4>Activity timeline</h4></div>'+composerHtml('jcComposer')+'<div id="jTimeline">'+timelineHtml(r)+'</div>')+
     '</div>'+
     '<div class="modal-foot">'+(isNew?'':'<button class="btn danger" id="jDelete"><i data-lucide="trash-2"></i>Delete</button>')+'<div class="grow"></div><button class="btn" id="jCancel">Cancel</button><button class="btn pri" id="jSave"><i data-lucide="check"></i>Save work</button></div>';
-  var jc=$('#jClient'); buildClientSelect(jc,r.client);
-  var js=$('#jSite'); buildSiteSelect(js,r.client||'',r.site);
+  var jc=$('#jClient'); buildClientSelect(jc,r.clientId||'');
+  var js=$('#jSite'); buildSiteSelect(js,r.clientId||'',r.siteId||'');
   jc.addEventListener('change',function(){ buildSiteSelect(js,jc.value,''); });
   openScrimModal('jobScrim','jobModal'); icons();
   $('#jobClose').addEventListener('click',function(){ closeScrimModal('jobScrim','jobModal'); });
   $('#jCancel').addEventListener('click',function(){ closeScrimModal('jobScrim','jobModal'); });
   if(!isNew){ var jd=$('#jDelete'); if(jd)jd.addEventListener('click',function(){ confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed.',function(){ DB.works=DB.works.filter(function(x){return x.id!==r.id;}); save(); closeScrimModal('jobScrim','jobModal'); render(); toast('Work deleted'); }); }); }
   $('#jSave').addEventListener('click',function(){
-      var prevStatus=r.status, prevDue=r.dueDate, prevValue=r.value, prevClient=r.client, prevSite=r.site, prevSupplier=r.supplier, prevNext=r.nextAction, prevStage=r.stageOwner;
+      var prevStatus=r.status, prevDue=r.dueDate, prevValue=r.value, prevClient=r.clientId, prevSite=r.siteId, prevSupplier=r.supplierId, prevNext=r.nextAction, prevStage=r.stageOwner;
     r.wqRef=$('#jWq').value.trim(); r.value=$('#jVal').value===''?'':+$('#jVal').value;
-    r.client=$('#jClient').value; r.site=$('#jSite').value; r.supplier=$('#jSup').value; r.status=$('#jStatus').value;
+    r.clientId=$('#jClient').value; r.siteId=$('#jSite').value; r.supplierId=$('#jSup').value; r.status=$('#jStatus').value;
+    r.client=''; r.site=''; r.supplier='';
     r.description=$('#jDesc').value.trim(); r.stageOwner=$('#jStage').value.trim(); r.actionOwner=$('#jAction').value.trim();
     r.nextAction=$('#jNext').value.trim(); r.dueDate=$('#jDue').value; r.dateReceived=$('#jRec').value; r.summary=$('#jSum').value.trim();
     if(isNew){ DB.works.unshift(r); logEvent(r,'Job created',''); }
@@ -2525,9 +2539,9 @@ function openJob(id){
       if(r.status!==prevStatus) logEvent(r,'Status', r.status);
       if(r.dueDate!==prevDue) logEvent(r,'Due date', fmtDate(r.dueDate));
       if(String(r.value)!==String(prevValue)) logEvent(r,'Value', money(r.value));
-      if(r.client!==prevClient) logEvent(r,'Client', r.client||'');
-      if(r.site!==prevSite) logEvent(r,'Site', r.site||'');
-      if(r.supplier!==prevSupplier) logEvent(r,'Supplier', r.supplier||'');
+      if(r.clientId!==prevClient) logEvent(r,'Client', jobClient(r));
+      if(r.siteId!==prevSite) logEvent(r,'Site', jobSite(r));
+      if(r.supplierId!==prevSupplier) logEvent(r,'Supplier', jobSupplier(r));
       if(r.nextAction!==prevNext) logEvent(r,'Next action', r.nextAction||'');
       if(r.stageOwner!==prevStage) logEvent(r,'Stage owner', r.stageOwner||'');
     }
