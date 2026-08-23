@@ -892,6 +892,22 @@ function workById(id){ return byId(DB.works,id); }
 function taskById(id){ return byId(DB.tasks,id); }
 function scpById(id){ return byId(DB.scps,id); }
 function clientById(id){ return byId(DB.clients,id); }
+/* ---- Directory lifecycle (V31.5.1A). Stable key + behaviour flag, never a
+   boolean and never the display label. "offer" is the only behaviour:
+   is this record offered when raising a NEW job? ---- */
+var DIR_STATES=[
+  {key:'bau',label:'BAU',offer:true},
+  {key:'hold',label:'On hold',offer:false},
+  {key:'stopped',label:'Stopped',offer:false}
+];
+function dirState(rec){ var k=(rec&&rec.state)||'bau'; return DIR_STATES.find(function(s){return s.key===k;})||DIR_STATES[0]; }
+function isOffered(rec){ return dirState(rec).offer; }
+/* ---- Link, don't copy: jobs hold IDs, display names resolve at render ---- */
+function eachSite(fn){ (DB.clients||[]).forEach(function(c){ (c.managers||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ fn(s,c,m); }); }); }); }
+function siteById(id){ if(!id) return null; var hit=null; eachSite(function(s,c){ if(s.id===id) hit={site:s,client:c}; }); return hit; }
+function jobClient(w){ var c=(w&&w.clientId)?clientById(w.clientId):null; return c?c.name:((w&&w.client)||''); }
+function jobSite(w){ var hit=(w&&w.siteId)?siteById(w.siteId):null; return hit?hit.site.name:((w&&w.site)||''); }
+function jobSupplier(w){ var p=(w&&w.supplierId)?scpById(w.supplierId):null; return p?p.company:((w&&w.supplier)||''); }
 function rowIdOf(el){ var tr=el.closest('tr'); return tr&&tr.dataset.id; }
 function cardIdOf(el){ var c=el.closest('.pcard'); return c&&c.dataset.id; }
 var esc=function(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
@@ -924,7 +940,7 @@ function applyTheme(){
 }
 try{ if(window.matchMedia){ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){ applyTheme(); }); } }catch(e){}
 function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},userPrefs:{},schemaVersion:1}; }
-var CURRENT_SCHEMA_VERSION=4;
+var CURRENT_SCHEMA_VERSION=5;
 var MIGRATIONS=[
   // v1 -> v2: give every supply-chain partner an empty structured coverage list
   function(data){
@@ -941,6 +957,41 @@ var MIGRATIONS=[
   function(data){
     (data.works||[]).forEach(function(w){ if(!Array.isArray(w.events)) w.events=[]; });
     (data.tasks||[]).forEach(function(t){ if(!Array.isArray(t.events)) t.events=[]; });
+    return data;
+  },
+  // v4 -> v5: link jobs to clients, sites and suppliers by permanent ID,
+  // and give every directory record a lifecycle state (BAU / On hold / Stopped)
+  function(data){
+    var norm=function(s){ return String(s==null?'':s).trim().toLowerCase(); };
+    var clientIdByName={}, siteByName={}, scpIdByName={};
+    (data.clients||[]).forEach(function(c){
+      if(!c.id) c.id=uid();
+      if(!c.state) c.state='bau';
+      if(!('stoppedAt' in c)) c.stoppedAt=null;
+      if(c.name) clientIdByName[norm(c.name)]=c.id;
+      (c.managers||[]).forEach(function(m){
+        (m.sites||[]).forEach(function(s){
+          if(!s.id) s.id=uid();
+          if(!s.state) s.state='bau';
+          if(!('stoppedAt' in s)) s.stoppedAt=null;
+          if(s.name) siteByName[norm(s.name)]={siteId:s.id,clientId:c.id};
+        });
+      });
+    });
+    (data.scps||[]).forEach(function(p){
+      if(!p.id) p.id=uid();
+      if(!p.state) p.state='bau';
+      if(!('stoppedAt' in p)) p.stoppedAt=null;
+      if(p.company) scpIdByName[norm(p.company)]=p.id;
+    });
+    (data.works||[]).forEach(function(w){
+      var hit=siteByName[norm(w.site)];
+      var cid=clientIdByName[norm(w.client)]||(hit?hit.clientId:'');
+      w.clientId=cid; if(!clientIdByName[norm(w.client)]) w.client='';
+      w.siteId=hit?hit.siteId:''; if(!hit) w.site='';
+      var sid=scpIdByName[norm(w.supplier)]||'';
+      w.supplierId=sid; if(!sid) w.supplier='';
+    });
     return data;
   }
 ];
