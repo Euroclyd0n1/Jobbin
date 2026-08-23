@@ -411,6 +411,20 @@ td.edit:hover{ box-shadow:inset 0 0 0 1px var(--line); border-radius:5px; }
 .coverage-edit:hover{ color:var(--accent); }
 .coverage-edit:hover i{ color:var(--accent); }
 .coverage-edit.coverage-empty{ color:var(--ink-3); }
+.life{ display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border-radius:20px; font-size:0.7rem; font-weight:650; letter-spacing:0.02em; border:1px solid var(--line); color:var(--ink-3); transition:background .14s var(--ease), border-color .14s var(--ease), color .14s var(--ease); }
+.life .pip{ width:5px; height:5px; border-radius:50%; background:var(--green-line); flex:0 0 auto; }
+.life[data-s="hold"]{ color:var(--amber-deep); background:var(--amber-soft); border-color:var(--amber); }
+.life[data-s="stopped"]{ color:var(--slate); background:var(--slate-soft); border-color:var(--slate); }
+.life[data-s="hold"] .pip, .life[data-s="stopped"] .pip{ background:currentColor; }
+button.life:hover{ border-color:var(--ink-3); color:var(--ink-2); }
+button.life[data-s="hold"]:hover{ color:var(--amber); }
+button.life:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.life.sm{ padding:1px 7px; font-size:0.66rem; }
+.life-inherit{ background:transparent; border-style:dashed; }
+.stopped-on{ font-size:0.72rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.namebits{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; min-width:0; }
+.pcard.dir-stopped, .nitem.dir-stopped{ opacity:.6; transition:opacity .2s var(--ease); }
+.pcard.dir-stopped:hover, .nitem.dir-stopped:hover{ opacity:1; }
 .tags{ margin-top:11px; display:flex; flex-wrap:wrap; gap:6px; }
 .tag{ font-size:0.72rem; font-weight:600; padding:2px 9px; border-radius:6px; background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line); }
 .cstats{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:13px; }
@@ -901,6 +915,57 @@ var DIR_STATES=[
 ];
 function dirState(rec){ var k=(rec&&rec.state)||'bau'; return DIR_STATES.find(function(s){return s.key===k;})||DIR_STATES[0]; }
 function isOffered(rec){ return dirState(rec).offer; }
+/* A record is unavailable for new work if its OWN state blocks it, OR a parent
+   above it blocks it. The parent's state is READ, never copied onto the child,
+   so coming off hold restores every child's own state with no repair work. */
+function dirBlock(rec,parent){
+  if(parent && !isOffered(parent)) return {by:'parent', state:dirState(parent), rec:parent};
+  if(rec && !isOffered(rec)) return {by:'own', state:dirState(rec), rec:rec};
+  return null;
+}
+function sitesUnder(c){ var out=[]; ((c&&c.managers)||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ out.push(s); }); }); return out; }
+function fmtStopped(ts){ return ts?new Date(ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''; }
+function openJobsFor(match){ return (DB.works||[]).filter(function(w){ return match(w) && CLOSED.indexOf(w.status)<0; }); }
+function lifeBadge(rec,key,cls,parent){
+  var blk=dirBlock(rec,parent), inherited=!!(blk&&blk.by==='parent');
+  var shown=inherited?blk.state.key:dirState(rec).key;
+  var label=inherited?(blk.state.label+' · via client'):dirState(rec).label;
+  return '<button type="button" class="life'+(cls?' '+cls:'')+(inherited?' life-inherit':'')+'" data-s="'+shown+'" data-life="'+key+'" title="'+(inherited?'Blocked by its client, change it there':'Change availability')+'"><span class="pip"></span>'+esc(label)+'</button>';
+}
+function stoppedTag(rec){ return (rec&&rec.state==='stopped'&&rec.stoppedAt)?'<span class="stopped-on">Stopped '+esc(fmtStopped(rec.stoppedAt))+'</span>':''; }
+function setDirState(rec,key,label,jobMatch){
+  var to=DIR_STATES.find(function(s){return s.key===key;});
+  if(!to||!rec||rec.state===key) return;
+  rec.state=key;
+  rec.stoppedAt=(key==='stopped')?Date.now():null;
+  /* The person who hits the surprise is whoever opens the job, so the line
+     goes onto every job still in flight. A history line, never a comment. */
+  if(jobMatch) openJobsFor(jobMatch).forEach(function(w){ logEvent(w,label+' availability', to.label); });
+  save(); render(); toast(label+' set to '+to.label);
+}
+function openLifeMenu(anchor,key){
+  var p=key.split(':'), kind=p[0], rec=null, parent=null, name='', label='', jobMatch=null;
+  if(kind==='client'){ rec=clientById(p[1]); if(!rec)return; name=rec.name; label='Client'; jobMatch=function(w){ return w.clientId===rec.id; }; }
+  else if(kind==='site'){ var c=clientById(p[1]); if(!c)return; var m=byId(c.managers,p[2]); if(!m)return; rec=byId(m.sites,p[3]); if(!rec)return; parent=c; name=rec.name; label='Site'; jobMatch=function(w){ return w.siteId===rec.id; }; }
+  else { rec=scpById(p[1]); if(!rec)return; name=rec.company; label='Contractor'; jobMatch=function(w){ return w.supplierId===rec.id; }; }
+  var blk=dirBlock(rec,parent);
+  if(blk && blk.by==='parent'){ toast(name+' is blocked by '+parent.name+'. Change it on the client.'); return; }
+  openCellDropdown(anchor,DIR_STATES.map(function(s){ return {value:s.key,label:s.label}; }),rec.state||'bau',function(v){
+    if(v===rec.state) return;
+    if(v==='bau'){ setDirState(rec,v,label,jobMatch); return; }
+    var jobs=openJobsFor(jobMatch).length, kids=(kind==='client')?sitesUnder(rec).length:0;
+    var msg=(kids?('Its '+kids+' site'+(kids===1?'':'s')+' stop being available for new jobs too. '):'')+
+      (jobs?(jobs+' job'+(jobs===1?'':'s')+' still open. They carry on and finish normally.'):'Nothing in flight.');
+    confirmDel(v==='hold'?('Put '+name+' on hold?'):('Stop '+name+'?'),msg,function(){ setDirState(rec,v,label,jobMatch); },v==='hold'?'Put on hold':'Stop');
+  });
+}
+/* Capture phase, so a badge inside a collapsible row never toggles it. */
+document.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('[data-life]');
+  if(!b) return;
+  e.preventDefault(); e.stopPropagation();
+  openLifeMenu(b,b.getAttribute('data-life'));
+},true);
 /* ---- Link, don't copy: jobs hold IDs, display names resolve at render ---- */
 function eachSite(fn){ (DB.clients||[]).forEach(function(c){ (c.managers||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ fn(s,c,m); }); }); }); }
 function siteById(id){ if(!id) return null; var hit=null; eachSite(function(s,c){ if(s.id===id) hit={site:s,client:c}; }); return hit; }
@@ -1310,7 +1375,7 @@ function sitesForClient(name){ var c=DB.clients.find(function(x){return x.name==
 /* Pickers write permanent IDs. Only BAU records are offered, but whatever this
    job already references stays selectable so historical jobs still render. */
 function offeredClients(keepId){ return (DB.clients||[]).filter(function(c){ return isOffered(c)||c.id===keepId; }); }
-function offeredSitesFor(clientId,keepId){ var out=[],c=clientId?clientById(clientId):null; if(!c)return out; (c.managers||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ if(isOffered(s)||s.id===keepId) out.push(s); }); }); return out; }
+function offeredSitesFor(clientId,keepId){ var out=[],c=clientId?clientById(clientId):null; if(!c)return out; (c.managers||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ if(!dirBlock(s,c)||s.id===keepId) out.push(s); }); }); return out; }
 function offeredScps(keepId){ return (DB.scps||[]).filter(function(p){ return isOffered(p)||p.id===keepId; }); }
 function optList(items,valKey,labKey,cur){ return items.map(function(x){ return '<option value="'+esc(x[valKey])+'"'+(x[valKey]===cur?' selected':'')+'>'+esc(x[labKey])+'</option>'; }).join(''); }
 function buildClientSelect(sel,clientId){ var list=offeredClients(clientId); sel.innerHTML='<option value="">'+(list.length?'— Select client —':'No clients yet')+'</option>'+optList(list,'id','name',clientId||''); }
@@ -2031,9 +2096,9 @@ function clientCard(c){
   var t=qClients.toLowerCase();
   var st=jobStatsFor(c.name);
   var rgmsOpen=t?c.managers.some(function(m){return mgrMatches(m,t);}):!!openSet[c.id+':rgms'];
-  return '<div class="pcard" data-id="'+c.id+'">'+
+  return '<div class="pcard'+(c.state==='stopped'?' dir-stopped':'')+'" data-id="'+c.id+'">'+
     '<div class="card-act"><button class="icon-btn" data-editclient="'+c.id+'"><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delclient="'+c.id+'"><i data-lucide="trash-2"></i></button></div>'+
-    '<div class="nm"><span class="av" style="background:'+avc(c.name)+'">'+initials(c.name)+'</span>'+esc(c.name)+'</div>'+
+    '<div class="nm"><span class="av" style="background:'+avc(c.name)+'">'+initials(c.name)+'</span><span class="namebits">'+esc(c.name)+lifeBadge(c,'client:'+c.id,'',null)+stoppedTag(c)+'</span></div>'+
     '<div class="cstats">'+
     '<div class="open"><div class="lbl"><i data-lucide="loader"></i>Open</div><div class="n">'+st.open+'</div><div class="v">'+money(st.openVal)+'</div></div>'+
     '<div class="closed"><div class="lbl"><i data-lucide="circle-check-big"></i>Closed</div><div class="n">'+st.closed+'</div><div class="v">'+money(st.closedVal)+'</div></div>'+
@@ -2060,8 +2125,8 @@ function siteItem(c,m,s,t){
   var peopleHtml = s.people.length
     ? s.people.map(function(p){ var sub=[p.role,p.email,p.phone].filter(Boolean).map(esc).join(' · '); return '<div class="scp-person" data-pid="'+p.id+'"><div class="sp-main"><span class="sp-name">'+esc(p.name)+'</span>'+(sub?'<span class="sp-sub">'+sub+'</span>':'')+'</div><span class="acts"><button class="icon-btn" data-editsiteperson="'+c.id+':'+m.id+':'+s.id+':'+p.id+'" title="Edit person"><i data-lucide="pen-line"></i></button><button class="trm" data-delsiteperson="'+c.id+':'+m.id+':'+s.id+':'+p.id+'" title="Remove person"><i data-lucide="x"></i></button></span></div>'; }).join('')
     : '<div style="font-size:12px;color:var(--ink-3);padding:4px 8px">No key people yet.</div>';
-  return '<div class="nitem'+(open?' open':'')+'">'+
-    '<div class="nitem-top" data-toggle="'+s.id+'"><i data-lucide="chevron-right" class="chev"></i><span class="nm3"><i data-lucide="map-pin"></i>'+esc(s.name)+'</span><span class="ct">'+s.people.length+'</span><span class="acts"><button class="icon-btn" data-editsite="'+c.id+':'+m.id+':'+s.id+'"><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delsite="'+c.id+':'+m.id+':'+s.id+'"><i data-lucide="trash-2"></i></button></span></div>'+
+  return '<div class="nitem'+(open?' open':'')+(dirBlock(s,c)&&dirBlock(s,c).state.key==='stopped'?' dir-stopped':'')+'">'+
+    '<div class="nitem-top" data-toggle="'+s.id+'"><i data-lucide="chevron-right" class="chev"></i><span class="nm3"><i data-lucide="map-pin"></i>'+esc(s.name)+'</span>'+lifeBadge(s,'site:'+c.id+':'+m.id+':'+s.id,'sm',c)+'<span class="ct">'+s.people.length+'</span><span class="acts"><button class="icon-btn" data-editsite="'+c.id+':'+m.id+':'+s.id+'"><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delsite="'+c.id+':'+m.id+':'+s.id+'"><i data-lucide="trash-2"></i></button></span></div>'+
     (s.address?'<div class="addr">'+esc(s.address)+(s.phone?' · '+esc(s.phone):'')+'</div>':'')+
     '<div class="nitem-body">'+
     peopleHtml+
@@ -2102,8 +2167,8 @@ function scpCard(s){
     (avail.length?'<div class="trade-add-row"><select data-addtrade="'+s.id+'"><option value="">+ Add trade…</option>'+avail.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select></div>':'<div style="font-size:11px;color:var(--ink-3);margin-top:8px">All master trades added. Manage the list in Settings.</div>');
   var peopleBody=(people.length?people.map(function(p){return '<div class="scp-person" data-pid="'+p.id+'"><div class="sp-main"><span class="sp-name">'+esc(p.name)+'</span>'+([p.role,p.email,p.phone].filter(Boolean).length?'<span class="sp-sub">'+[p.role,p.email,p.phone].filter(Boolean).map(esc).join(' · ')+'</span>':'')+'</div><span class="acts"><button class="icon-btn" data-editscpperson="'+s.id+'|'+p.id+'" title="Edit person"><i data-lucide="pen-line"></i></button><button class="trm" data-rmscpperson="'+s.id+'|'+p.id+'" title="Remove person"><i data-lucide="x"></i></button></span></div>';}).join(''):'<div style="font-size:12px;color:var(--ink-3);padding:4px 8px">No people yet.</div>')+
     '<button class="addrow" data-addscpperson="'+s.id+'"><i data-lucide="user-plus"></i>Add person</button>';
-  return '<div class="pcard" data-id="'+s.id+'"><div class="card-act"><button class="icon-btn" data-editscp><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delscp><i data-lucide="trash-2"></i></button></div>'+
-    '<div class="nm"><span class="av" style="background:'+avc(s.company)+'">'+initials(s.company)+'</span>'+esc(s.company)+'</div>'+
+  return '<div class="pcard'+(s.state==='stopped'?' dir-stopped':'')+'" data-id="'+s.id+'"><div class="card-act"><button class="icon-btn" data-editscp><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delscp><i data-lucide="trash-2"></i></button></div>'+
+    '<div class="nm"><span class="av" style="background:'+avc(s.company)+'">'+initials(s.company)+'</span><span class="namebits">'+esc(s.company)+lifeBadge(s,'scp:'+s.id,'',null)+stoppedTag(s)+'</span></div>'+
     '<div class="meta">'+(s.phone?'<div><i data-lucide="phone"></i>'+esc(s.phone)+'</div>':'')+'<button type="button" class="coverage-edit'+(coverage.length?'':' coverage-empty')+'" data-editcoverage title="Edit coverage areas"><i data-lucide="map"></i>'+coverageText+'</button></div>'+
     '<div class="cstats">'+
     '<div class="open"><div class="lbl"><i data-lucide="loader"></i>Open</div><div class="n">'+st.open+'</div><div class="v">'+money(st.openVal)+'</div></div>'+
