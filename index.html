@@ -2621,7 +2621,7 @@ function openJob(id){
 function openDrawer(id){
   var r=workById(id); if(!r)return;
   var d=$('#drawer');
-  d.innerHTML='<div class="drawer-head"><div><div class="ttl">'+esc(r.wqRef||'Updates')+'</div><div class="sub">'+esc([r.client,r.site].filter(Boolean).join(' · ')||'Activity timeline')+'</div></div><button class="icon-btn" id="drClose"><i data-lucide="x"></i></button></div>'+
+  d.innerHTML='<div class="drawer-head"><div><div class="ttl">'+esc(r.wqRef||'Updates')+'</div><div class="sub">'+esc([jobClient(r),jobSite(r)].filter(Boolean).join(' · ')||'Activity timeline')+'</div></div><button class="icon-btn" id="drClose"><i data-lucide="x"></i></button></div>'+
     '<div class="drawer-body">'+
     composerHtml('drComposer')+
     '<div id="drTimeline">'+timelineHtml(r)+'</div>'+
