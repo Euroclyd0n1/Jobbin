@@ -1077,6 +1077,12 @@ function companyStatuses(){
   return Array.isArray(list)&&list.length?list:DEFAULT_STATUS_DEFINITIONS;
 }
 
+function orderedStatuses(){
+  return companyStatuses().slice().sort(function(a,b){
+    return (+a.order||0)-(+b.order||0);
+  });
+}
+
 function statusByKey(key){
   return companyStatuses().find(function(s){ return s.key===key; })||companyStatuses()[0];
 }
@@ -1210,7 +1216,7 @@ window.jbBoundaries={ load:loadBoundaries, catalogue:function(){ return REGION_C
 var AVCOL=['var(--accent)','var(--blue)','var(--violet)','var(--amber)','var(--green)','var(--red)','var(--slate)'];
 var TYPE_IC={note:'message-square',email:'mail',teams:'video',phone:'phone'};
 var TYPE_ORDER=[['note','message-square','Note'],['email','mail','Email'],['teams','video','Teams'],['phone','phone','Phone']];
-var statusMeta=function(n){ return STATUSES.find(function(s){return s.name===n;})||STATUSES[0]; };
+/* Status labels and colours now resolve through statusKey and its fixed bucket. */
 var $=function(s,r){ return (r||document).querySelector(s); };
 var $$=function(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
 function byId(arr,id){ return (arr||[]).find(function(x){return x.id===id;}); }
@@ -1238,7 +1244,7 @@ function dirBlock(rec,parent){
 }
 function sitesUnder(c){ var out=[]; ((c&&c.managers)||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ out.push(s); }); }); return out; }
 function fmtStopped(ts){ return ts?new Date(ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''; }
-function openJobsFor(match){ return (DB.works||[]).filter(function(w){ return match(w) && CLOSED.indexOf(w.status)<0; }); }
+function openJobsFor(match){ return (DB.works||[]).filter(function(w){ return match(w) && !statusIsFinished(w); }); }
 function lifeBadge(rec,key,cls,parent){
   var blk=dirBlock(rec,parent), inherited=!!(blk&&blk.by==='parent');
   var shown=inherited?blk.state.key:dirState(rec).key;
@@ -1821,7 +1827,7 @@ function offeredScps(keepId){ return (DB.scps||[]).filter(function(p){ return is
 function optList(items,valKey,labKey,cur){ return items.map(function(x){ return '<option value="'+esc(x[valKey])+'"'+(x[valKey]===cur?' selected':'')+'>'+esc(x[labKey])+'</option>'; }).join(''); }
 function buildClientSelect(sel,clientId){ var list=offeredClients(clientId); sel.innerHTML='<option value="">'+(list.length?'— Select client —':'No clients yet')+'</option>'+optList(list,'id','name',clientId||''); }
 function buildSiteSelect(sel,clientId,siteId){ var list=offeredSitesFor(clientId,siteId); var ph=!clientId?'Pick a client first':(list.length?'— Select site —':'No sites for this client'); sel.innerHTML='<option value="">'+ph+'</option>'+optList(list,'id','name',siteId||''); sel.disabled=!clientId; }
-function statsBy(fn){ var js=DB.works.filter(fn); var open=js.filter(function(j){return CLOSED.indexOf(j.status)<0;}); var closed=js.filter(function(j){return CLOSED.indexOf(j.status)>=0;}); return {open:open.length,openVal:open.reduce(function(a,j){return a+(+j.value||0);},0),closed:closed.length,closedVal:closed.reduce(function(a,j){return a+(+j.value||0);},0)}; }
+function statsBy(fn){ var js=DB.works.filter(fn); var open=js.filter(function(j){return !statusIsFinished(j);}); var closed=js.filter(statusIsFinished); return {open:open.length,openVal:open.reduce(function(a,j){return a+(+j.value||0);},0),closed:closed.length,closedVal:closed.reduce(function(a,j){return a+(+j.value||0);},0)}; }
 function jobStatsFor(name){ return statsBy(function(w){return jobClient(w)===name;}); }
 function scpStatsFor(co){ return statsBy(function(w){return jobSupplier(w)===co;}); }
 function openScrimModal(scrim,modal){ $('#'+scrim).classList.add('show'); $('#'+modal).classList.add('show'); }
@@ -1916,7 +1922,7 @@ var BOARD_FIELD_TYPES={
 
 function viewDashboard(){
   var w=DB.works;
-  var open=w.filter(function(x){return CLOSED.indexOf(x.status)<0;});
+  var open=w.filter(function(x){return !statusIsFinished(x);});
   var totalVal=w.reduce(function(a,x){return a+(+x.value||0);},0);
   var openVal=open.reduce(function(a,x){return a+(+x.value||0);},0);
   var today=isoIn(0), wkEnd=isoIn(7);
@@ -1924,7 +1930,7 @@ function viewDashboard(){
 
 var  items=[];
 
-w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&CLOSED.indexOf(x.status)<0&&PARKED.indexOf(x.status)<0){ items.push({kind:'job',date:x.dueDate,over:nags(x),job:x}); } });
+w.forEach(function(x){ if(x.dueDate&&x.dueDate<=wkEnd&&!statusIsFinished(x)&&!statusIsOnHold(x)){ items.push({kind:'job',date:x.dueDate,over:nags(x),job:x}); } });
 
 DB.tasks.forEach(function(t){
 
@@ -1948,11 +1954,11 @@ var  overdue=items.filter(function(it){return  it.over;}).length;
       '<div class="attn-head"><i data-lucide="'+(anyOver?'alarm-clock':'clock')+'"></i><h3>Needs attention</h3><span class="ac">'+items.length+'</span></div>'+
       '<div class="attn-list">'+items.map(function(it){
         if(it.kind==='job'){
-          var m=statusMeta(it.job.status);
+          var m=statusBucketMeta(it.job);
           return '<div class="attn-row" data-attn="'+it.job.id+'">'+
             '<span class="attn-tag '+(it.over?'over':'soon')+'"><i data-lucide="calendar"></i>'+(it.over?'Overdue':'Due soon')+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+esc(it.job.wqRef||'—')+' · '+esc(it.job.client||'')+(it.job.site?' · '+esc(it.job.site):'')+'</div><div class="attn-desc">'+esc(it.job.description||'')+'</div></div>'+
-            '<span class="attn-status"><span class="pill" style="color:'+m.c+';background:'+m.bg+'">'+esc(it.job.status)+'</span></span>'+
+            '<span class="attn-status"><span class="pill" style="color:'+m.c+';background:'+m.bg+'">'+esc(statusLabel(it.job))+'</span></span>'+
             '<span class="attn-due" style="'+(it.over?'color:var(--red)':'')+'">'+fmtDate(it.date)+'</span>'+
           '</div>';
         } else {
@@ -1968,10 +1974,12 @@ var  overdue=items.filter(function(it){return  it.over;}).length;
         }
       }).join('')+'</div></div>';
   }
-  var counts=STATUSES.map(function(s){return {s:s,n:w.filter(function(x){return x.status===s.name;}).length};}).filter(function(o){return o.n>0;});
+  var counts=orderedStatuses().map(function(s){
+    return {s:s,m:STATUS_BUCKET_META[s.bucket]||STATUS_BUCKET_META.open,n:w.filter(function(x){return x.statusKey===s.key;}).length};
+  }).filter(function(o){return o.n>0;});
   var maxN=Math.max(1,Math.max.apply(null,counts.map(function(o){return o.n;}).concat([0])));
   var brk=counts.length
-    ? counts.map(function(o){return '<div class="brk-row"><span class="dot" style="background:'+o.s.c+'"></span><span class="nm">'+esc(o.s.name)+'</span><span class="track"><span class="fill" style="width:'+(o.n/maxN*100)+'%;background:'+o.s.c+'"></span></span><span class="ct">'+o.n+'</span></div>';}).join('')
+    ? counts.map(function(o){return '<div class="brk-row"><span class="dot" style="background:'+o.m.c+'"></span><span class="nm">'+esc(o.s.label)+'</span><span class="track"><span class="fill" style="width:'+(o.n/maxN*100)+'%;background:'+o.m.c+'"></span></span><span class="ct">'+o.n+'</span></div>';}).join('')
     : '<div style="padding:24px 0;text-align:center;color:var(--ink-3);font-size:13px">No works yet</div>';
   var byCount={},byVal={};
   w.forEach(function(x){ if(!x.client)return; byCount[x.client]=(byCount[x.client]||0)+1; byVal[x.client]=(byVal[x.client]||0)+(+x.value||0); });
@@ -2003,13 +2011,13 @@ function filteredRows(){
      from its record, so search, filters and sort all read live values.
      Edits still write IDs to the real record via workById. */
   var rows=(DB.works||[]).map(function(w){
-    return Object.assign({},w,{client:jobClient(w),site:jobSite(w),supplier:jobSupplier(w)});
+    return Object.assign({},w,{client:jobClient(w),site:jobSite(w),supplier:jobSupplier(w),status:statusLabel(w)});
   });
   var searchText=q.trim().toLowerCase();
 
   if(boardFilters.hideCompleted && !searchText){
     rows=rows.filter(function(row){
-      return CLOSED.indexOf(row.status)<0;
+      return !statusIsHidden(workById(row.id)||row);
     });
   }
 
@@ -2490,8 +2498,9 @@ function viewOverview(){
 
 }
 function rowHtml(r){
-  var m=statusMeta(r.status);
-  var overdue=r.dueDate&&r.dueDate<isoIn(0)&&CLOSED.indexOf(r.status)<0;
+  var live=workById(r.id)||r;
+  var m=statusBucketMeta(live);
+  var overdue=r.dueDate&&r.dueDate<isoIn(0)&&!statusIsFinished(live)&&!statusIsOnHold(live);
   var cc=(r.comments&&r.comments.length)||0;
   var hasPin=(r.comments||[]).some(function(c){return c.pinned;});
   return '<tr data-id="'+r.id+'">'+
@@ -2501,13 +2510,14 @@ function rowHtml(r){
     '<td class="edit" data-f="description" style="max-width:260px">'+esc(r.description||'—')+'</td>'+
     '<td class="edit hide-sm" data-f="supplier">'+esc(r.supplier||'—')+'</td>'+
     '<td class="edit" data-f="value"><span class="val">'+money(r.value)+'</span></td>'+
-    '<td data-f="status"><span class="pill" data-status style="color:'+m.c+';background:'+m.bg+'">'+esc(r.status)+'</span></td>'+
+    '<td data-f="status"><span class="pill" data-status style="color:'+m.c+';background:'+m.bg+'">'+esc(statusLabel(live))+'</span></td>'+
     '<td class="edit hide-sm" data-f="nextAction" style="max-width:180px">'+esc(r.nextAction||'—')+'</td>'+
     '<td class="edit" data-f="dueDate" style="'+(overdue?'color:var(--red);font-weight:650':'')+'">'+fmtDate(r.dueDate)+'</td>'+
     '<td><button class="comment-btn" data-comment title="Open updates"><i data-lucide="message-square"></i><span class="n">'+cc+'</span>'+(hasPin?'<span class="pindot"></span>':'')+'</button></td>'+
     '<td class="col-act"><button class="row-del" data-del title="Delete work"><i data-lucide="x"></i></button></td>'+
   '</tr>';
 }
+
 function startEdit(td){
   if(td.querySelector('input,select'))return;
   var id=rowIdOf(td),f=td.dataset.f,rec=workById(id),cur=rec[f]==null?'':rec[f];
@@ -2535,7 +2545,7 @@ function startEdit(td){
   el.addEventListener('blur',commit,{once:true});
   el.addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();el.blur();} if(e.key==='Escape'){el.removeEventListener('blur',commit);render();} });
 }
-function cycleStatus(pill){ var rec=workById(rowIdOf(pill)); var i=STATUSES.findIndex(function(s){return s.name===rec.status;}); var prev=rec.status; rec.status=STATUSES[(i+1)%STATUSES.length].name; if(rec.status!==prev) logEvent(rec,'Status', rec.status); save(); render(); }
+function cycleStatus(pill){ var rec=workById(rowIdOf(pill)); if(!rec)return; var list=orderedStatuses(),i=list.findIndex(function(s){return s.key===rec.statusKey;}),prev=rec.statusKey,next=list[(i+1+list.length)%list.length]; rec.statusKey=next.key; rec.status=next.label; if(rec.statusKey!==prev)logEvent(rec,'Status',next.label); save(); render(); }
 function delWork(id){ var r=workById(id); confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed from this device.',function(){ DB.works=DB.works.filter(function(x){return x.id!==id;}); save(); render(); toast('Work deleted'); }); }
 var viInternal='g', internalCols=3;
 function viewInternal(){
@@ -3051,7 +3061,7 @@ function openJob(id){
     '<div class="modal-body">'+
     '<div class="grid-2"><div class="field"><label>Job Ref</label><input id="jWq" value="'+esc(r.wqRef||'')+'" placeholder="Job-…"></div><div class="field"><label>Value (£)</label><input id="jVal" type="number" step="0.01" value="'+(r.value===''||r.value==null?'':r.value)+'"></div></div>'+
     '<div class="grid-2"><div class="field"><label>Client</label><select id="jClient"></select></div><div class="field"><label>Site</label><select id="jSite"></select></div></div>'+
-    '<div class="grid-2"><div class="field"><label>Supplier / SCP</label><select id="jSup"><option value="">— Select supplier —</option>'+optList(offeredScps(r.supplierId),'id','company',r.supplierId||'')+'</select></div><div class="field"><label>Status</label><select id="jStatus">'+STATUSES.map(function(s){return '<option '+(r.status===s.name?'selected':'')+'>'+s.name+'</option>';}).join('')+'</select></div></div>'+
+    '<div class="grid-2"><div class="field"><label>Supplier / SCP</label><select id="jSup"><option value="">— Select supplier —</option>'+optList(offeredScps(r.supplierId),'id','company',r.supplierId||'')+'</select></div><div class="field"><label>Status</label><select id="jStatus">'+orderedStatuses().map(function(s){return '<option value="'+esc(s.key)+'" '+(r.statusKey===s.key?'selected':'')+'>'+esc(s.label)+'</option>';}).join('')+'</select></div></div>'+
     '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
     '<div class="grid-2"><div class="field"><label>Stage owner</label><input id="jStage" value="'+esc(r.stageOwner||'')+'"></div><div class="field"><label>Action owner</label><input id="jAction" value="'+esc(r.actionOwner||'')+'"></div></div>'+
     '<div class="field"><label>Next action</label><input id="jNext" value="'+esc(r.nextAction||'')+'"></div>'+
@@ -3068,15 +3078,15 @@ function openJob(id){
   $('#jCancel').addEventListener('click',function(){ closeScrimModal('jobScrim','jobModal'); });
   if(!isNew){ var jd=$('#jDelete'); if(jd)jd.addEventListener('click',function(){ confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed.',function(){ DB.works=DB.works.filter(function(x){return x.id!==r.id;}); save(); closeScrimModal('jobScrim','jobModal'); render(); toast('Work deleted'); }); }); }
   $('#jSave').addEventListener('click',function(){
-      var prevStatus=r.status, prevDue=r.dueDate, prevValue=r.value, prevClient=r.clientId, prevSite=r.siteId, prevSupplier=r.supplierId, prevNext=r.nextAction, prevStage=r.stageOwner;
+  var prevStatus=r.statusKey, prevDue=r.dueDate, prevValue=r.value, prevClient=r.clientId, prevSite=r.siteId, prevSupplier=r.supplierId, prevNext=r.nextAction, prevStage=r.stageOwner;
     r.wqRef=$('#jWq').value.trim(); r.value=$('#jVal').value===''?'':+$('#jVal').value;
-    r.clientId=$('#jClient').value; r.siteId=$('#jSite').value; r.supplierId=$('#jSup').value; r.status=$('#jStatus').value;
+    r.clientId=$('#jClient').value; r.siteId=$('#jSite').value; r.supplierId=$('#jSup').value; r.statusKey=$('#jStatus').value; r.status=statusLabel(r);
     r.client=''; r.site=''; r.supplier='';
     r.description=$('#jDesc').value.trim(); r.stageOwner=$('#jStage').value.trim(); r.actionOwner=$('#jAction').value.trim();
     r.nextAction=$('#jNext').value.trim(); r.dueDate=$('#jDue').value; r.dateReceived=$('#jRec').value; r.summary=$('#jSum').value.trim();
     if(isNew){ DB.works.unshift(r); logEvent(r,'Job created',''); }
     else {
-      if(r.status!==prevStatus) logEvent(r,'Status', r.status);
+      if(r.statusKey!==prevStatus) logEvent(r,'Status',statusLabel(r));
       if(r.dueDate!==prevDue) logEvent(r,'Due date', fmtDate(r.dueDate));
       if(String(r.value)!==String(prevValue)) logEvent(r,'Value', money(r.value));
       if(r.clientId!==prevClient) logEvent(r,'Client', jobClient(r));
