@@ -41,6 +41,10 @@
   --ink-3: oklch(0.585 0.015 78);
   --accent: oklch(0.430 0.072 165);
   --accent-soft: oklch(0.945 0.028 165);
+  --accent-deep: oklch(0.360 0.070 165);
+  --accent-line: oklch(0.840 0.045 165);
+  --status-active: oklch(0.430 0.072 165);
+  --status-active-soft: oklch(0.945 0.028 165);
   --green: oklch(0.520 0.110 150);
   --green-soft: oklch(0.945 0.040 150);
   --green-deep: oklch(0.360 0.070 165);
@@ -78,6 +82,10 @@
   --ink-3: oklch(0.608 0.020 64);
   --accent: oklch(0.452 0.070 162);
   --accent-soft: oklch(0.894 0.033 160);
+  --accent-deep: oklch(0.382 0.068 162);
+  --accent-line: oklch(0.795 0.050 161);
+  --status-active: oklch(0.452 0.070 162);
+  --status-active-soft: oklch(0.894 0.033 160);
   --green: oklch(0.520 0.110 150);
   --green-soft: oklch(0.900 0.042 150);
   --green-deep: oklch(0.382 0.068 162);
@@ -111,6 +119,10 @@
   --ink-3: oklch(0.610 0.018 250);
   --accent: oklch(0.725 0.090 165);
   --accent-soft: oklch(0.300 0.040 165);
+  --accent-deep: oklch(0.830 0.080 165);
+  --accent-line: oklch(0.440 0.060 165);
+  --status-active: oklch(0.725 0.090 165);
+  --status-active-soft: oklch(0.300 0.040 165);
   --green: oklch(0.725 0.110 150);
   --green-soft: oklch(0.300 0.045 150);
   --green-deep: oklch(0.830 0.080 165);
@@ -129,6 +141,64 @@
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.30), 0 1px 1px oklch(0 0 0 / 0.24);
   --shadow-md: 0 6px 22px oklch(0 0 0 / 0.40), 0 2px 6px oklch(0 0 0 / 0.30);
   --shadow-lg: -18px 0 50px oklch(0 0 0 / 0.45);
+}
+/* Accent changes interface chrome only. Status, attention and activity colours
+   remain semantic and never follow this preference. */
+[data-theme="light"][data-accent="blue"]{
+  --accent:oklch(0.525 0.145 247);
+  --accent-soft:oklch(0.945 0.038 247);
+  --accent-deep:oklch(0.405 0.115 247);
+  --accent-line:oklch(0.830 0.055 247);
+}
+[data-theme="light"][data-accent="red"]{
+  --accent:oklch(0.555 0.155 24);
+  --accent-soft:oklch(0.948 0.036 27);
+  --accent-deep:oklch(0.445 0.135 24);
+  --accent-line:oklch(0.835 0.060 26);
+}
+[data-theme="light"][data-accent="orange"]{
+  --accent:oklch(0.665 0.145 58);
+  --accent-soft:oklch(0.950 0.050 68);
+  --accent-deep:oklch(0.535 0.130 53);
+  --accent-line:oklch(0.840 0.070 61);
+}
+
+[data-theme="dusk"][data-accent="blue"]{
+  --accent:oklch(0.500 0.135 247);
+  --accent-soft:oklch(0.890 0.044 247);
+  --accent-deep:oklch(0.395 0.110 247);
+  --accent-line:oklch(0.765 0.065 247);
+}
+[data-theme="dusk"][data-accent="red"]{
+  --accent:oklch(0.535 0.150 24);
+  --accent-soft:oklch(0.892 0.047 27);
+  --accent-deep:oklch(0.430 0.130 24);
+  --accent-line:oklch(0.770 0.072 26);
+}
+[data-theme="dusk"][data-accent="orange"]{
+  --accent:oklch(0.625 0.140 58);
+  --accent-soft:oklch(0.895 0.062 65);
+  --accent-deep:oklch(0.505 0.125 52);
+  --accent-line:oklch(0.775 0.080 59);
+}
+
+[data-theme="night"][data-accent="blue"]{
+  --accent:oklch(0.735 0.125 247);
+  --accent-soft:oklch(0.300 0.050 247);
+  --accent-deep:oklch(0.835 0.090 247);
+  --accent-line:oklch(0.455 0.075 247);
+}
+[data-theme="night"][data-accent="red"]{
+  --accent:oklch(0.720 0.155 24);
+  --accent-soft:oklch(0.305 0.060 26);
+  --accent-deep:oklch(0.825 0.105 24);
+  --accent-line:oklch(0.455 0.080 25);
+}
+[data-theme="night"][data-accent="orange"]{
+  --accent:oklch(0.785 0.135 62);
+  --accent-soft:oklch(0.315 0.055 64);
+  --accent-deep:oklch(0.860 0.100 65);
+  --accent-line:oklch(0.470 0.075 61);
 }
 [data-theme="night"] .scrim{ background:oklch(0 0 0 / 0.55); }
 .leaflet-container:focus,
@@ -781,6 +851,94 @@ button.life:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; 
 .theme-seg button{ padding:8px 16px; font-size:0.84rem; font-weight:600; color:var(--ink-2); transition:background .12s, color .12s; }
 .theme-seg button:not(:last-child){ border-right:1px solid var(--line); }
 .theme-seg button.on{ background:var(--accent); color:var(--surface); }
+
+/* Selected interface chrome follows the personal accent.
+   Status, attention and activity colours stay fixed. */
+.nav button.on,
+.gtd-buckets button.on,
+.cell-opt.on,
+.board-head.active,
+.icon-btn.tasked{
+  color:var(--accent-deep);
+}
+
+.nav button.on .ncount{
+  color:var(--accent-deep);
+}
+
+.search input:focus,
+select.f:focus,
+.board-filter-fields input:focus,
+.board-filter-fields select:focus,
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+.trade-edit-row select:focus,
+.person-form input:focus,
+.composer:focus-within,
+.tl-edit .ce-edit,
+.tag-edit:focus-within{
+  border-color:var(--accent-line);
+  box-shadow:0 0 0 3px var(--accent-soft);
+}
+
+
+.rank .rb span{
+  background:var(--accent-line);
+}
+
+.btn.pri:hover{
+  background:var(--accent-deep);
+}
+.accent-picker{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.accent-choice{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 10px;
+  border:1px solid var(--line);
+  border-radius:var(--r-sm);
+  color:var(--ink-2);
+  background:var(--surface);
+  font-size:0.82rem;
+  font-weight:600;
+}
+
+.accent-choice:hover{
+  background:var(--surface-2);
+  color:var(--ink);
+}
+
+.accent-choice.on{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px var(--accent-soft);
+  color:var(--ink);
+}
+
+.accent-choice:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+
+.accent-swatch{
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  border:1px solid var(--line);
+  flex:0 0 auto;
+}
+
+.accent-swatch.green{ background:oklch(0.520 0.110 150); }
+.accent-swatch.blue{ background:oklch(0.560 0.130 247); }
+.accent-swatch.red{ background:oklch(0.570 0.155 24); }
+.accent-swatch.orange{ background:oklch(0.680 0.145 58); }
+
 @media (max-width:880px){
   .app, .app.panel-open{ grid-template-columns:1fr; }
   /* No room to squeeze on a phone, so it slides over. Proper narrow-screen
@@ -869,7 +1027,7 @@ var STATUSES=[
   {name:'Quoting',c:'var(--amber)',bg:'var(--amber-soft)'},
   {name:'Submitted',c:'var(--blue)',bg:'var(--blue-soft)'},
   {name:'Approved',c:'var(--violet)',bg:'var(--violet-soft)'},
-  {name:'In Progress',c:'var(--accent)',bg:'var(--accent-soft)'},
+  {name:'In Progress',c:'var(--status-active)',bg:'var(--status-active-soft)'},
   {name:'Completed',c:'var(--green)',bg:'var(--green-soft)'},
   {name:'Invoiced',c:'var(--ink-2)',bg:'var(--surface-2)'},
   {name:'On Hold',c:'var(--red)',bg:'var(--red-soft)'}
@@ -1102,12 +1260,29 @@ function appearanceMode(){
 function applyTheme(){
   var mode=appearanceMode();
   document.documentElement.setAttribute('data-theme',mode);
+  applyAccent();
   $$('#themeQuick [data-mode]').forEach(function(b){ b.classList.toggle('on',b.dataset.mode===mode); });
 }
 function setAppearanceMode(mode){
   if(['light','dusk','night'].indexOf(mode)<0) return;
   setPref('appearanceMode',mode);
   applyTheme();
+}
+
+function appearanceAccent(){
+  var accent=getPref('appearanceAccent','green');
+  return ['green','blue','red','orange'].indexOf(accent)>=0?accent:'green';
+}
+
+function applyAccent(){
+  document.documentElement.setAttribute('data-accent',appearanceAccent());
+}
+
+function setAppearanceAccent(accent){
+  if(['green','blue','red','orange'].indexOf(accent)<0) return;
+  setPref('appearanceAccent',accent);
+  applyAccent();
+  if(view==='settings')render();
 }
 function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},userPrefs:{},schemaVersion:1}; }
 var CURRENT_SCHEMA_VERSION=5;
@@ -1671,7 +1846,7 @@ var  overdue=items.filter(function(it){return  it.over;}).length;
           return '<div class="attn-row" data-attntask="'+t.id+'">'+
             '<span class="attn-tag '+(it.chase?(it.over?'now':'chase'):(it.over?'over':'soon'))+'"><i data-lucide="'+(it.chase?'phone-call':'calendar')+'"></i>'+lab+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+ref+'</div><div class="attn-desc">'+esc(t.title)+'</div></div>'+
-            '<span class="attn-status"><span class="pill" style="color:var(--green-deep);background:var(--accent-soft)">'+esc(GTD_LABEL[t.bucket]||'Task')+'</span></span>'+
+            '<span class="attn-status"><span class="pill" style="color:var(--green-deep);background:var(--green-soft)">'+esc(GTD_LABEL[t.bucket]||'Task')+'</span></span>'+
             '<span class="attn-due" style="'+(it.over?'color:var(--red)':'')+'">'+fmtDate(it.date)+'</span>'+
           '</div>';
         }
@@ -2378,9 +2553,10 @@ function viewSettings(){
   return '<div style="max-width:720px">'+
     '<div class="panel" style="margin-bottom:16px" id="storageMeterWrap">'+storageMeterHtml()+'</div>'+
     '<div class="panel" style="margin-bottom:16px" id="driveWrap">'+drivePanelHtml()+'</div>'+
-    '<div class="panel" style="margin-bottom:16px"><div class="ph"><div><h3>Appearance</h3><p>Light, dark, or follow your system setting. Saved on this device.</p></div></div>'+
-    '<div class="theme-seg" id="themeSeg">'+['system','light','dark'].map(function(t){return '<button data-theme-opt="'+t+'" class="'+(theme===t?'on':'')+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</button>';}).join('')+'</div>'+
-    '</div>'+
+    '<div class="panel" style="margin-bottom:16px"><div class="ph"><div><h3>Accent colour</h3><p>Changes selected navigation, primary actions, job references and other interface highlights. Status colours stay fixed.</p></div></div>'+
+    '<div class="accent-picker" id="accentPicker">'+
+    [['green','Green'],['blue','Blue'],['red','Red'],['orange','Orange']].map(function(a){return '<button type="button" class="accent-choice '+(appearanceAccent()===a[0]?'on':'')+'" data-accent-opt="'+a[0]+'"><span class="accent-swatch '+a[0]+'"></span>'+a[1]+'</button>';}).join('')+
+    '</div></div>'+
     '<div class="panel" style="margin-bottom:16px"><div class="ph"><div><h3>Master trades</h3><p>Every SCP card pulls its available trades from this list.</p></div></div>'+
     '<div id="tradeChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'+DB.trades.map(function(t){return '<span class="tag" style="display:inline-flex;align-items:center;gap:6px">'+esc(t)+'<button class="trm" data-rmmaster="'+esc(t)+'" style="width:18px;height:18px"><i data-lucide="x"></i></button></span>';}).join('')+'</div>'+
     '<div style="display:flex;gap:8px"><input id="newTrade" placeholder="Add a trade…" style="flex:1 1 auto;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--paper);outline:none"><button class="btn pri" id="addTradeBtn"><i data-lucide="plus"></i>Add</button></div>'+
@@ -3173,6 +3349,7 @@ function wireChrome(){
   $('#nav').addEventListener('click',function(e){ var b=e.target.closest('button'); if(b&&b.dataset.view)go(b.dataset.view); });
   $('#cogBtn').addEventListener('click',function(){ go('settings'); });
   $('#themeQuick').addEventListener('click',function(e){ var b=e.target.closest('[data-mode]'); if(b)setAppearanceMode(b.dataset.mode); });
+  document.addEventListener('click',function(e){ var b=e.target.closest&&e.target.closest('[data-accent-opt]'); if(b)setAppearanceAccent(b.dataset.accentOpt); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&panelCurrent()) closePanel(); });
   var bg=$('#burger'); if(bg)bg.addEventListener('click',function(){ $('#side').classList.toggle('show'); });
   $('#confCancel').addEventListener('click',closeConfirm);
