@@ -1032,6 +1032,34 @@ var STATUSES=[
   {name:'Invoiced',c:'var(--ink-2)',bg:'var(--surface-2)'},
   {name:'On Hold',c:'var(--red)',bg:'var(--red-soft)'}
 ];
+/* Editable status definitions live in company settings. Buckets are fixed
+   behaviour switches; labels and flat order are editable. */
+var STATUS_BUCKETS=[
+  {key:'open',label:'Open'},
+  {key:'active',label:'Active'},
+  {key:'on-hold',label:'On hold'},
+  {key:'done',label:'Done'},
+  {key:'closed',label:'Closed'}
+];
+
+var DEFAULT_STATUS_DEFINITIONS=[
+  {key:'awaiting-review',label:'Awaiting review',bucket:'open',order:0},
+  {key:'awaiting-survey-eta',label:'Awaiting survey ETA',bucket:'active',order:1},
+  {key:'awaiting-survey',label:'Awaiting survey',bucket:'active',order:2},
+  {key:'awaiting-quote',label:'Awaiting quote',bucket:'active',order:3},
+  {key:'awaiting-quote-approval',label:'Awaiting quote approval',bucket:'active',order:4},
+  {key:'quote-approved',label:'Quote approved',bucket:'active',order:5},
+  {key:'awaiting-eta',label:'Awaiting ETA',bucket:'active',order:6},
+  {key:'in-progress',label:'In progress',bucket:'active',order:7},
+  {key:'awaiting-worksheets',label:'Awaiting worksheets',bucket:'active',order:8},
+  {key:'completed',label:'Completed',bucket:'done',order:9},
+  {key:'invoiced',label:'Invoiced',bucket:'closed',order:10},
+  {key:'closed',label:'Closed',bucket:'closed',order:11},
+  {key:'cancelled',label:'Cancelled',bucket:'closed',order:12},
+  {key:'on-hold',label:'On Hold',bucket:'on-hold',order:13}
+];
+
+/* Temporary compatibility lists until every behaviour reads status buckets. */
 var CLOSED=['Completed','Invoiced'];
 var PARKED=['On Hold']; // deliberately paused: excluded from overdue/attention nagging, but still an OPEN job in stats (NOT closed)
 function nags(w){ return !!(w.dueDate && w.dueDate<isoIn(0) && CLOSED.indexOf(w.status)<0 && PARKED.indexOf(w.status)<0); }
@@ -1284,8 +1312,8 @@ function setAppearanceAccent(accent){
   applyAccent();
   if(view==='settings')render();
 }
-function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},userPrefs:{},schemaVersion:1}; }
-var CURRENT_SCHEMA_VERSION=5;
+function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},companySettings:{},userPrefs:{},schemaVersion:1}; }
+var CURRENT_SCHEMA_VERSION=6;
 var MIGRATIONS=[
   // v1 -> v2: give every supply-chain partner an empty structured coverage list
   function(data){
@@ -1338,9 +1366,40 @@ var MIGRATIONS=[
       w.supplierId=sid; if(!sid) w.supplier='';
     });
     return data;
+  },
+  // v5 -> v6: create the company status store and link every job to a
+  // permanent status key instead of relying on an editable display label
+  function(data){
+    if(!data.companySettings||typeof data.companySettings!=='object'){
+      data.companySettings={};
+    }
+
+    data.companySettings.statusDefinitions=DEFAULT_STATUS_DEFINITIONS.map(function(s){
+      return {key:s.key,label:s.label,bucket:s.bucket,order:s.order};
+    });
+
+    var legacyStatusKeys={
+      'Enquiry':'awaiting-review',
+      'Quoting':'awaiting-quote',
+      'Submitted':'awaiting-quote-approval',
+      'Approved':'quote-approved',
+      'In Progress':'in-progress',
+      'Completed':'completed',
+      'Invoiced':'invoiced',
+      'On Hold':'on-hold'
+    };
+
+    (data.works||[]).forEach(function(w){
+      if(!w.statusKey){
+        w.statusKey=legacyStatusKeys[w.status]||'awaiting-review';
+      }
+    });
+
+    return data;
   }
 ];
 /* ---- The one per-person settings store (V31.5.1A) ----
+
    One placeholder person until real logins exist. Everything
    personal (who did it, hide/show toggles, appearance choices,
    pins) reads and writes THIS store. Never build a second one. */
