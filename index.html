@@ -1061,8 +1061,65 @@ var DEFAULT_STATUS_DEFINITIONS=[
 
 /* Temporary compatibility lists until every behaviour reads status buckets. */
 var CLOSED=['Completed','Invoiced'];
+
+/* Runtime status helpers. All behaviour reads the fixed bucket, never an
+   editable status label. */
+var STATUS_BUCKET_META={
+  open:{label:'Open',c:'var(--slate)',bg:'var(--slate-soft)'},
+  active:{label:'Active',c:'var(--status-active)',bg:'var(--status-active-soft)'},
+  'on-hold':{label:'On hold',c:'var(--red)',bg:'var(--red-soft)'},
+  done:{label:'Done',c:'var(--green)',bg:'var(--green-soft)'},
+  closed:{label:'Closed',c:'var(--ink-2)',bg:'var(--surface-2)'}
+};
+
+function companyStatuses(){
+  var list=DB&&DB.companySettings&&DB.companySettings.statusDefinitions;
+  return Array.isArray(list)&&list.length?list:DEFAULT_STATUS_DEFINITIONS;
+}
+
+function statusByKey(key){
+  return companyStatuses().find(function(s){ return s.key===key; })||companyStatuses()[0];
+}
+
+function jobStatus(w){
+  if(!w)return companyStatuses()[0];
+  return statusByKey(w.statusKey);
+}
+
+function statusLabel(w){
+  var s=jobStatus(w);
+  return s?s.label:'';
+}
+
+function statusBucket(w){
+  var s=jobStatus(w);
+  return s?s.bucket:'open';
+}
+
+function statusOrder(w){
+  var s=jobStatus(w);
+  return s&&Number.isFinite(+s.order)?+s.order:999;
+}
+
+function statusBucketMeta(w){
+  return STATUS_BUCKET_META[statusBucket(w)]||STATUS_BUCKET_META.open;
+}
+
+function statusIsFinished(w){
+  var b=statusBucket(w);
+  return b==='done'||b==='closed';
+}
+
+function statusIsHidden(w){
+  return statusBucket(w)==='closed';
+}
+
+function statusIsOnHold(w){
+  return statusBucket(w)==='on-hold';
+}
+
 var PARKED=['On Hold']; // deliberately paused: excluded from overdue/attention nagging, but still an OPEN job in stats (NOT closed)
-function nags(w){ return !!(w.dueDate && w.dueDate<isoIn(0) && CLOSED.indexOf(w.status)<0 && PARKED.indexOf(w.status)<0); }
+function nags(w){ return !!(w.dueDate && w.dueDate<isoIn(0) && !statusIsFinished(w) && !statusIsOnHold(w)); }
 /* Region catalogue: UK is the built-in default. Loaded country map files
    (task-63) will ADD their regions here at runtime, keyed by country. */
 var REGION_CATALOGUE={
