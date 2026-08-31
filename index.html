@@ -755,6 +755,15 @@ button.life:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; 
 .ev-line:before{ content:""; flex:0 0 auto; width:3px; height:3px; border-radius:50%; background:currentColor; opacity:.55; transform:translateY(-1px); transition:opacity .18s var(--ease); }
 .ev-what{ flex:1 1 auto; min-width:0; }
 .ev-when{ flex:0 0 auto; opacity:.85; }
+.ev-line.ev-alert{ font-weight:700; color:var(--red); }
+.ev-line.ev-alert:before{ opacity:.9; }
+.ev-run:hover .ev-line.ev-alert{ color:var(--red); }
+.cancel-note{ display:flex; gap:10px; padding:12px 13px; margin-bottom:14px; border:1px solid var(--red); border-radius:var(--r-sm); background:var(--red-soft); }
+.cancel-note i{ width:16px; height:16px; color:var(--red); flex:0 0 auto; margin-top:2px; }
+.cancel-note .cn-main{ min-width:0; }
+.cancel-note .cn-head{ font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); }
+.cancel-note .cn-reason{ font-size:0.86rem; color:var(--ink); margin-top:3px; overflow-wrap:anywhere; }
+.cancel-note .cn-meta{ font-size:0.74rem; color:var(--ink-3); margin-top:4px; }
 .ev-run:hover .ev-who{ color:var(--ink-2); }
 .ev-run:hover .ev-line{ color:var(--ink); }
 .ev-run:hover .ev-line:before{ opacity:.8; }
@@ -1429,7 +1438,7 @@ function setAppearanceAccent(accent){
   if(view==='settings')render();
 }
 function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},companySettings:{},userPrefs:{},schemaVersion:1}; }
-var CURRENT_SCHEMA_VERSION=7;
+var CURRENT_SCHEMA_VERSION=8;
 var MIGRATIONS=[
   // v1 -> v2: give every supply-chain partner an empty structured coverage list
   function(data){
@@ -1532,12 +1541,23 @@ var MIGRATIONS=[
       w.track='quote-request';
       w.statusKey=remap[w.statusKey]||w.statusKey||'awaiting-survey-eta';
       if(!valid[w.statusKey]) w.statusKey='awaiting-survey-eta';
-      if(!Array.isArray(w.cancellations)) w.cancellations=[];
+       if(!Array.isArray(w.cancellations)) w.cancellations=[];
       if(!('preHoldStatusKey' in w)) w.preHoldStatusKey='';
+    });
+    return data;
+  },
+  // v7 -> v8: remember the status a job was cancelled from, and type every
+  // cancellation record so cancels and reopens read as one ordered history
+  function(data){
+    (data.works||[]).forEach(function(w){
+      if(!('preCancelStatusKey' in w)) w.preCancelStatusKey='';
+      if(!Array.isArray(w.cancellations)) w.cancellations=[];
+      w.cancellations.forEach(function(c){ if(!c.type) c.type='cancelled'; });
     });
     return data;
   }
 ];
+
 /* ---- The one per-person settings store (V31.5.1A) ----
 
    One placeholder person until real logins exist. Everything
@@ -2622,17 +2642,29 @@ function startEdit(td){
   el.addEventListener('blur',commit,{once:true});
   el.addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();el.blur();} if(e.key==='Escape'){el.removeEventListener('blur',commit);render();} });
 }
-function requestCancellation(rec,onConfirm){
+/* One reason gate, used for both leaving a job cancelled and cancelling it,
+   so neither direction can happen as a silent one-click status change. */
+function requestStatusReason(rec,kind,targetLabel,onConfirm){
+  var cancelling=kind==='cancelled';
+
   openAdd(
-    'Cancel job',
-    '<div class="field"><label>Reason for cancellation</label><textarea id="cancelReason" placeholder="Explain why this job is being cancelled"></textarea></div>'+
-    '<p id="cancelHelp" style="font-size:0.76rem;color:var(--ink-3)">At least 15 characters required.</p>',
+    cancelling?'Cancel job':'Reopen job',
+    '<div class="field"><label>'+
+      (cancelling?'Reason for cancellation':'Reason for reopening')+
+    '</label><textarea id="statusReason" placeholder="'+
+      (cancelling
+        ?'Explain why this job is being cancelled'
+        :'Explain why this job is being reopened as '+esc(targetLabel))+
+    '"></textarea></div>'+
+    '<p id="statusReasonHelp" style="font-size:0.76rem;color:var(--ink-3)">At least 15 characters required.</p>',
     function(){
-      var reason=$('#cancelReason').value.trim();
+      var reason=$('#statusReason').value.trim();
       if(reason.length<15)return false;
       if(!Array.isArray(rec.cancellations))rec.cancellations=[];
       rec.cancellations.push({
+        type:cancelling?'cancelled':'reopened',
         reason:reason,
+        status:targetLabel,
         by:currentUser().name,
         t:Date.now()
       });
@@ -2641,17 +2673,41 @@ function requestCancellation(rec,onConfirm){
     }
   );
 
-  var input=$('#cancelReason'),button=$('#addSave');
-  button.textContent='Cancel job';
+  var input=$('#statusReason'),button=$('#addSave');
+  button.textContent=cancelling?'Cancel job':'Reopen job';
   button.disabled=true;
 
   input.addEventListener('input',function(){
     var n=input.value.trim().length;
     button.disabled=n<15;
-    $('#cancelHelp').textContent=n<15
+    $('#statusReasonHelp').textContent=n<15
       ?(15-n)+' more character'+(15-n===1?'':'s')+' required.'
       :'Reason ready.';
   });
+}
+
+function latestCancellation(rec){
+  var list=(rec&&rec.cancellations)||[];
+  for(var i=list.length-1;i>=0;i--){
+    if(list[i]&&list[i].type!=='reopened')return list[i];
+  }
+  return null;
+}
+
+/* Always visible, never hideable by the activity eye toggle, because the
+   reason a job stopped must not be something you can switch off. */
+function cancellationNoteHtml(rec){
+  if(!rec||rec.statusKey!=='cancelled')return '';
+  var last=latestCancellation(rec);
+  if(!last)return '';
+  return '<div class="cancel-note">'+
+    '<i data-lucide="ban"></i>'+
+    '<div class="cn-main">'+
+      '<div class="cn-head">Cancelled</div>'+
+      '<div class="cn-reason">'+esc(last.reason||'')+'</div>'+
+      '<div class="cn-meta">'+esc(last.by||'')+' · '+evTime(last.t)+'</div>'+
+    '</div>'+
+  '</div>';
 }
 
 function setJobStatus(rec,key,onDone){
@@ -2661,20 +2717,38 @@ function setJobStatus(rec,key,onDone){
     return;
   }
 
+  var reopening=prev==='cancelled';
+
   function apply(reason){
     if(key==='on-hold'&&prev!=='on-hold'){
       rec.preHoldStatusKey=prev;
     }
 
+    if(key==='cancelled'){
+      rec.preCancelStatusKey=prev;
+    }
+
     rec.statusKey=key;
     rec.status=next.label;
-    logEvent(rec,key==='cancelled'?'Cancelled':'Status',reason||next.label);
+
+    if(key==='cancelled'){
+      logEvent(rec,'Cancelled',reason);
+    }else if(reopening){
+      logEvent(rec,'Reopened',next.label+' — '+reason);
+    }else{
+      logEvent(rec,'Status',next.label);
+    }
 
     if(onDone)onDone(true);
   }
 
   if(key==='cancelled'){
-    requestCancellation(rec,apply);
+    requestStatusReason(rec,'cancelled',next.label,apply);
+    return;
+  }
+
+  if(reopening){
+    requestStatusReason(rec,'reopened',next.label,apply);
     return;
   }
 
@@ -2690,6 +2764,12 @@ function cycleStatus(pill){
   var nextKey;
 
   if(
+    rec.statusKey==='cancelled'
+  ){
+    nextKey=keys.indexOf(rec.preCancelStatusKey)>=0
+      ?rec.preCancelStatusKey
+      :keys[0];
+  }else if(
     rec.statusKey==='on-hold'&&
     keys.indexOf(rec.preHoldStatusKey)>=0
   ){
@@ -2703,6 +2783,7 @@ function cycleStatus(pill){
     render();
   });
 }
+
 function delWork(id){ var r=workById(id); confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed from this device.',function(){ DB.works=DB.works.filter(function(x){return x.id!==id;}); save(); render(); toast('Work deleted'); }); }
 var viInternal='g', internalCols=3;
 function viewInternal(){
@@ -3217,6 +3298,7 @@ function openJob(id){
     track:'quote-request',
     statusKey:'awaiting-survey-eta',
     preHoldStatusKey:'',
+    preCancelStatusKey:'',
     cancellations:[],
     clientId:'',
     siteId:'',
@@ -3273,6 +3355,7 @@ function openJob(id){
           '</select>'+
         '</div>'+
       '</div>'+
+      cancellationNoteHtml(r)+
       '<div class="field"><label>Status</label><select id="jStatus"></select></div>'+
       '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
       '<div class="grid-2">'+
@@ -3490,6 +3573,7 @@ function openDrawer(id){
   var d=$('#drawer');
   d.innerHTML='<div class="drawer-head"><div><div class="ttl">'+esc(r.wqRef||'Updates')+'</div><div class="sub">'+esc([jobClient(r),jobSite(r)].filter(Boolean).join(' · ')||'Activity timeline')+'</div></div><button class="icon-btn" id="drClose"><i data-lucide="x"></i></button></div>'+
     '<div class="drawer-body">'+
+    cancellationNoteHtml(r)+
     composerHtml('drComposer')+
     '<div id="drTimeline">'+timelineHtml(r)+'</div>'+
     '</div>';
@@ -3547,7 +3631,8 @@ function timelineHtml(r){
    while(i<items.length && items[i].kind==='event' && ((items[i].rec&&items[i].rec.by)||'You')===who){
       var e=items[i].rec;
       var what = e.cat ? (e.res ? esc(e.cat)+': '+esc(e.res) : esc(e.cat)) : '';
-      lines.push('<li class="ev-line"><span class="ev-what">'+what+'</span><span class="ev-when">'+evTime(e.t)+'</span></li>');
+      var alert=(e.cat==='Cancelled'||e.cat==='Reopened');
+      lines.push('<li class="ev-line'+(alert?' ev-alert':'')+'"><span class="ev-what">'+what+'</span><span class="ev-when">'+evTime(e.t)+'</span></li>');
       i++;
     }
     out.push('<div class="ev-run"><div class="ev-who">'+esc(who)+'</div><ul>'+lines.join('')+'</ul></div>');
