@@ -1094,6 +1094,33 @@ function statusByKey(key){
   return companyStatuses().find(function(s){ return s.key===key; })||companyStatuses()[0];
 }
 
+function jobTrack(w){ return w&&w.track==='reactive'?'reactive':'quote-request'; }
+
+function companyStatusSequences(){
+  var seq=DB&&DB.companySettings&&DB.companySettings.statusSequences;
+  return seq&&Array.isArray(seq['quote-request'])&&Array.isArray(seq.reactive)
+    ?seq
+    :DEFAULT_STATUS_SEQUENCES;
+}
+
+function trackStatusKeys(track){
+  var seq=companyStatusSequences();
+  return (seq[track==='reactive'?'reactive':'quote-request']||[]).slice();
+}
+
+function trackStatuses(track){
+  return trackStatusKeys(track).map(statusByKey).filter(Boolean);
+}
+
+function jobStatusChoices(w){
+  var out=trackStatuses(jobTrack(w));
+  ['on-hold','cancelled'].forEach(function(key){
+    var status=statusByKey(key);
+    if(status&&out.indexOf(status)<0)out.push(status);
+  });
+  return out;
+}
+
 function jobStatus(w){
   if(!w)return companyStatuses()[0];
   return statusByKey(w.statusKey);
@@ -1110,12 +1137,31 @@ function statusBucket(w){
 }
 
 function statusOrder(w){
+  var keys=trackStatusKeys(jobTrack(w)),i=keys.indexOf(w&&w.statusKey);
+  if(i>=0)return i;
   var s=jobStatus(w);
   return s&&Number.isFinite(+s.order)?+s.order:999;
 }
 
 function statusBucketMeta(w){
   return STATUS_BUCKET_META[statusBucket(w)]||STATUS_BUCKET_META.open;
+}
+
+function statusDefinitionVisualMeta(s){
+  if(s&&s.phase==='pre-work'){
+    return {label:'Pre-work',c:'var(--amber-deep)',bg:'var(--amber-soft)'};
+  }
+  if(s&&s.phase==='delivery'){
+    return {label:'Delivery',c:'var(--blue)',bg:'var(--blue-soft)'};
+  }
+  if(s&&s.phase==='exception'){
+    return {label:'Exception',c:'var(--red)',bg:'var(--red-soft)'};
+  }
+  return STATUS_BUCKET_META[(s&&s.bucket)||'open']||STATUS_BUCKET_META.open;
+}
+
+function statusVisualMeta(w){
+  return statusDefinitionVisualMeta(jobStatus(w));
 }
 
 function statusIsFinished(w){
@@ -1985,7 +2031,7 @@ var  overdue=items.filter(function(it){return  it.over;}).length;
       '<div class="attn-head"><i data-lucide="'+(anyOver?'alarm-clock':'clock')+'"></i><h3>Needs attention</h3><span class="ac">'+items.length+'</span></div>'+
       '<div class="attn-list">'+items.map(function(it){
         if(it.kind==='job'){
-          var m=statusBucketMeta(it.job);
+          var m=statusVisualMeta(it.job);
           return '<div class="attn-row" data-attn="'+it.job.id+'">'+
             '<span class="attn-tag '+(it.over?'over':'soon')+'"><i data-lucide="calendar"></i>'+(it.over?'Overdue':'Due soon')+'</span>'+
             '<div class="attn-main"><div class="attn-ref">'+esc(it.job.wqRef||'—')+' · '+esc(it.job.client||'')+(it.job.site?' · '+esc(it.job.site):'')+'</div><div class="attn-desc">'+esc(it.job.description||'')+'</div></div>'+
@@ -2006,7 +2052,7 @@ var  overdue=items.filter(function(it){return  it.over;}).length;
       }).join('')+'</div></div>';
   }
   var counts=orderedStatuses().map(function(s){
-    return {s:s,m:STATUS_BUCKET_META[s.bucket]||STATUS_BUCKET_META.open,n:w.filter(function(x){return x.statusKey===s.key;}).length};
+    return {s:s,m:statusDefinitionVisualMeta(s),n:w.filter(function(x){return x.statusKey===s.key;}).length};
   }).filter(function(o){return o.n>0;});
   var maxN=Math.max(1,Math.max.apply(null,counts.map(function(o){return o.n;}).concat([0])));
   var brk=counts.length
@@ -2530,7 +2576,7 @@ function viewOverview(){
 }
 function rowHtml(r){
   var live=workById(r.id)||r;
-  var m=statusBucketMeta(live);
+  var m=statusVisualMeta(live);
   var overdue=r.dueDate&&r.dueDate<isoIn(0)&&!statusIsFinished(live)&&!statusIsOnHold(live);
   var cc=(r.comments&&r.comments.length)||0;
   var hasPin=(r.comments||[]).some(function(c){return c.pinned;});
@@ -2576,7 +2622,87 @@ function startEdit(td){
   el.addEventListener('blur',commit,{once:true});
   el.addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();el.blur();} if(e.key==='Escape'){el.removeEventListener('blur',commit);render();} });
 }
-function cycleStatus(pill){ var rec=workById(rowIdOf(pill)); if(!rec)return; var list=orderedStatuses(),i=list.findIndex(function(s){return s.key===rec.statusKey;}),prev=rec.statusKey,next=list[(i+1+list.length)%list.length]; rec.statusKey=next.key; rec.status=next.label; if(rec.statusKey!==prev)logEvent(rec,'Status',next.label); save(); render(); }
+function requestCancellation(rec,onConfirm){
+  openAdd(
+    'Cancel job',
+    '<div class="field"><label>Reason for cancellation</label><textarea id="cancelReason" placeholder="Explain why this job is being cancelled"></textarea></div>'+
+    '<p id="cancelHelp" style="font-size:0.76rem;color:var(--ink-3)">At least 15 characters required.</p>',
+    function(){
+      var reason=$('#cancelReason').value.trim();
+      if(reason.length<15)return false;
+      if(!Array.isArray(rec.cancellations))rec.cancellations=[];
+      rec.cancellations.push({
+        reason:reason,
+        by:currentUser().name,
+        t:Date.now()
+      });
+      onConfirm(reason);
+      return true;
+    }
+  );
+
+  var input=$('#cancelReason'),button=$('#addSave');
+  button.textContent='Cancel job';
+  button.disabled=true;
+
+  input.addEventListener('input',function(){
+    var n=input.value.trim().length;
+    button.disabled=n<15;
+    $('#cancelHelp').textContent=n<15
+      ?(15-n)+' more character'+(15-n===1?'':'s')+' required.'
+      :'Reason ready.';
+  });
+}
+
+function setJobStatus(rec,key,onDone){
+  var next=statusByKey(key),prev=rec.statusKey;
+  if(!next||key===prev){
+    if(onDone)onDone(false);
+    return;
+  }
+
+  function apply(reason){
+    if(key==='on-hold'&&prev!=='on-hold'){
+      rec.preHoldStatusKey=prev;
+    }
+
+    rec.statusKey=key;
+    rec.status=next.label;
+    logEvent(rec,key==='cancelled'?'Cancelled':'Status',reason||next.label);
+
+    if(onDone)onDone(true);
+  }
+
+  if(key==='cancelled'){
+    requestCancellation(rec,apply);
+    return;
+  }
+
+  apply('');
+}
+
+function cycleStatus(pill){
+  var rec=workById(rowIdOf(pill));
+  if(!rec)return;
+
+  var keys=trackStatusKeys(jobTrack(rec));
+  var i=keys.indexOf(rec.statusKey);
+  var nextKey;
+
+  if(
+    rec.statusKey==='on-hold'&&
+    keys.indexOf(rec.preHoldStatusKey)>=0
+  ){
+    nextKey=rec.preHoldStatusKey;
+  }else{
+    nextKey=keys[(i+1+keys.length)%keys.length];
+  }
+
+  setJobStatus(rec,nextKey,function(){
+    save();
+    render();
+  });
+}
 function delWork(id){ var r=workById(id); confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed from this device.',function(){ DB.works=DB.works.filter(function(x){return x.id!==id;}); save(); render(); toast('Work deleted'); }); }
 var viInternal='g', internalCols=3;
 function viewInternal(){
@@ -3085,53 +3211,278 @@ function importBackup(e){
 }
 function openJob(id){
   var isNew=!id;
-  var r=isNew?{id:uid(),wqRef:'',clientId:'',siteId:'',supplierId:'',client:'',site:'',description:'',supplier:'',value:'',status:'Enquiry',stageOwner:'',actionOwner:'',nextAction:'',dueDate:'',dateReceived:isoIn(0),summary:'',comments:[],files:[],events:[]}:workById(id);
+  var r=isNew?{
+    id:uid(),
+    wqRef:'',
+    track:'quote-request',
+    statusKey:'awaiting-survey-eta',
+    preHoldStatusKey:'',
+    cancellations:[],
+    clientId:'',
+    siteId:'',
+    supplierId:'',
+    client:'',
+    site:'',
+    description:'',
+    supplier:'',
+    value:'',
+    status:'Awaiting survey ETA',
+    stageOwner:'',
+    actionOwner:'',
+    nextAction:'',
+    dueDate:'',
+    dateReceived:isoIn(0),
+    summary:'',
+    comments:[],
+    files:[],
+    events:[]
+  }:workById(id);
+
   if(!r)return;
+
   var m=$('#jobModal');
-  m.innerHTML='<div class="modal-head"><h2>'+(isNew?'New work':esc(r.wqRef||'Work'))+'</h2><button class="icon-btn" id="jobClose"><i data-lucide="x"></i></button></div>'+
-    '<div class="modal-body">'+
-    '<div class="grid-2"><div class="field"><label>Job Ref</label><input id="jWq" value="'+esc(r.wqRef||'')+'" placeholder="Job-…"></div><div class="field"><label>Value (£)</label><input id="jVal" type="number" step="0.01" value="'+(r.value===''||r.value==null?'':r.value)+'"></div></div>'+
-    '<div class="grid-2"><div class="field"><label>Client</label><select id="jClient"></select></div><div class="field"><label>Site</label><select id="jSite"></select></div></div>'+
-    '<div class="grid-2"><div class="field"><label>Supplier / SCP</label><select id="jSup"><option value="">— Select supplier —</option>'+optList(offeredScps(r.supplierId),'id','company',r.supplierId||'')+'</select></div><div class="field"><label>Status</label><select id="jStatus">'+orderedStatuses().map(function(s){return '<option value="'+esc(s.key)+'" '+(r.statusKey===s.key?'selected':'')+'>'+esc(s.label)+'</option>';}).join('')+'</select></div></div>'+
-    '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
-    '<div class="grid-2"><div class="field"><label>Stage owner</label><input id="jStage" value="'+esc(r.stageOwner||'')+'"></div><div class="field"><label>Action owner</label><input id="jAction" value="'+esc(r.actionOwner||'')+'"></div></div>'+
-    '<div class="field"><label>Next action</label><input id="jNext" value="'+esc(r.nextAction||'')+'"></div>'+
-    '<div class="grid-2"><div class="field"><label>Due date</label><input id="jDue" type="date" value="'+esc(r.dueDate||'')+'"></div><div class="field"><label>Date received</label><input id="jRec" type="date" value="'+esc(r.dateReceived||'')+'"></div></div>'+
-    '<div class="field"><label>Summary comments</label><textarea id="jSum">'+esc(r.summary||'')+'</textarea></div>'+
-    (isNew?'':'<div class="tl-head"><h4>Activity timeline</h4></div>'+composerHtml('jcComposer')+'<div id="jTimeline">'+timelineHtml(r)+'</div>')+
+  var track=jobTrack(r);
+
+  m.innerHTML=
+    '<div class="modal-head">'+
+      '<h2>'+(isNew?'New work':esc(r.wqRef||'Work'))+'</h2>'+
+      '<button class="icon-btn" id="jobClose"><i data-lucide="x"></i></button>'+
     '</div>'+
-    '<div class="modal-foot">'+(isNew?'':'<button class="btn danger" id="jDelete"><i data-lucide="trash-2"></i>Delete</button>')+'<div class="grow"></div><button class="btn" id="jCancel">Cancel</button><button class="btn pri" id="jSave"><i data-lucide="check"></i>Save work</button></div>';
-  var jc=$('#jClient'); buildClientSelect(jc,r.clientId||'');
-  var js=$('#jSite'); buildSiteSelect(js,r.clientId||'',r.siteId||'');
-  jc.addEventListener('change',function(){ buildSiteSelect(js,jc.value,''); });
-  openScrimModal('jobScrim','jobModal'); icons();
-  $('#jobClose').addEventListener('click',function(){ closeScrimModal('jobScrim','jobModal'); });
-  $('#jCancel').addEventListener('click',function(){ closeScrimModal('jobScrim','jobModal'); });
-  if(!isNew){ var jd=$('#jDelete'); if(jd)jd.addEventListener('click',function(){ confirmDel('Delete work?',(r.wqRef||'This work')+' will be permanently removed.',function(){ DB.works=DB.works.filter(function(x){return x.id!==r.id;}); save(); closeScrimModal('jobScrim','jobModal'); render(); toast('Work deleted'); }); }); }
-  $('#jSave').addEventListener('click',function(){
-  var prevStatus=r.statusKey, prevDue=r.dueDate, prevValue=r.value, prevClient=r.clientId, prevSite=r.siteId, prevSupplier=r.supplierId, prevNext=r.nextAction, prevStage=r.stageOwner;
-    r.wqRef=$('#jWq').value.trim(); r.value=$('#jVal').value===''?'':+$('#jVal').value;
-    r.clientId=$('#jClient').value; r.siteId=$('#jSite').value; r.supplierId=$('#jSup').value; r.statusKey=$('#jStatus').value; r.status=statusLabel(r);
-    r.client=''; r.site=''; r.supplier='';
-    r.description=$('#jDesc').value.trim(); r.stageOwner=$('#jStage').value.trim(); r.actionOwner=$('#jAction').value.trim();
-    r.nextAction=$('#jNext').value.trim(); r.dueDate=$('#jDue').value; r.dateReceived=$('#jRec').value; r.summary=$('#jSum').value.trim();
-    if(isNew){ DB.works.unshift(r); logEvent(r,'Job created',''); }
-    else {
-      if(r.statusKey!==prevStatus) logEvent(r,'Status',statusLabel(r));
-      if(r.dueDate!==prevDue) logEvent(r,'Due date', fmtDate(r.dueDate));
-      if(String(r.value)!==String(prevValue)) logEvent(r,'Value', money(r.value));
-      if(r.clientId!==prevClient) logEvent(r,'Client', jobClient(r));
-      if(r.siteId!==prevSite) logEvent(r,'Site', jobSite(r));
-      if(r.supplierId!==prevSupplier) logEvent(r,'Supplier', jobSupplier(r));
-      if(r.nextAction!==prevNext) logEvent(r,'Next action', r.nextAction||'');
-      if(r.stageOwner!==prevStage) logEvent(r,'Stage owner', r.stageOwner||'');
+    '<div class="modal-body">'+
+      '<div class="grid-2">'+
+        '<div class="field"><label>Job Ref</label><input id="jWq" value="'+esc(r.wqRef||'')+'" placeholder="Job-…"></div>'+
+        '<div class="field"><label>Value (£)</label><input id="jVal" type="number" step="0.01" value="'+(r.value===''||r.value==null?'':r.value)+'"></div>'+
+      '</div>'+
+      '<div class="grid-2">'+
+        '<div class="field"><label>Client</label><select id="jClient"></select></div>'+
+        '<div class="field"><label>Site</label><select id="jSite"></select></div>'+
+      '</div>'+
+      '<div class="grid-2">'+
+        '<div class="field">'+
+          '<label>Job track</label>'+
+          '<select id="jTrack" '+(!isNew&&r.supplierId?'disabled':'')+'>'+
+            '<option value="quote-request" '+(track==='quote-request'?'selected':'')+'>Quote Request</option>'+
+            '<option value="reactive" '+(track==='reactive'?'selected':'')+'>Reactive</option>'+
+          '</select>'+
+        '</div>'+
+        '<div class="field">'+
+          '<label>Supplier / SCP</label>'+
+          '<select id="jSup">'+
+            '<option value="">— Select supplier —</option>'+
+            optList(offeredScps(r.supplierId),'id','company',r.supplierId||'')+
+          '</select>'+
+        '</div>'+
+      '</div>'+
+      '<div class="field"><label>Status</label><select id="jStatus"></select></div>'+
+      '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
+      '<div class="grid-2">'+
+        '<div class="field"><label>Stage owner</label><input id="jStage" value="'+esc(r.stageOwner||'')+'"></div>'+
+        '<div class="field"><label>Action owner</label><input id="jAction" value="'+esc(r.actionOwner||'')+'"></div>'+
+      '</div>'+
+      '<div class="field"><label>Next action</label><input id="jNext" value="'+esc(r.nextAction||'')+'"></div>'+
+      '<div class="grid-2">'+
+        '<div class="field"><label>Due date</label><input id="jDue" type="date" value="'+esc(r.dueDate||'')+'"></div>'+
+        '<div class="field"><label>Date received</label><input id="jRec" type="date" value="'+esc(r.dateReceived||'')+'"></div>'+
+      '</div>'+
+      '<div class="field"><label>Summary comments</label><textarea id="jSum">'+esc(r.summary||'')+'</textarea></div>'+
+      (isNew
+        ?''
+        :'<div class="tl-head"><h4>Activity timeline</h4></div>'+
+          composerHtml('jcComposer')+
+          '<div id="jTimeline">'+timelineHtml(r)+'</div>'
+      )+
+    '</div>'+
+    '<div class="modal-foot">'+
+      (isNew
+        ?''
+        :'<button class="btn danger" id="jDelete"><i data-lucide="trash-2"></i>Delete</button>'
+      )+
+      '<div class="grow"></div>'+
+      '<button class="btn" id="jCancel">Cancel</button>'+
+      '<button class="btn pri" id="jSave"><i data-lucide="check"></i>Save work</button>'+
+    '</div>';
+
+  var jc=$('#jClient');
+  buildClientSelect(jc,r.clientId||'');
+
+  var js=$('#jSite');
+  buildSiteSelect(js,r.clientId||'',r.siteId||'');
+
+  var jt=$('#jTrack');
+  var jst=$('#jStatus');
+
+  function fillStatusSelect(preferred){
+    var probe={
+      track:jt.value,
+      statusKey:preferred
+    };
+
+    var choices=jobStatusChoices(probe);
+
+    if(!choices.some(function(s){
+      return s.key===preferred;
+    })){
+      preferred=trackStatusKeys(jt.value)[0];
     }
-    save(); closeScrimModal('jobScrim','jobModal'); render(); toast(isNew?'Work added':'Work saved');
+
+    jst.innerHTML=choices.map(function(s){
+      return '<option value="'+esc(s.key)+'" '+
+        (preferred===s.key?'selected':'')+
+        '>'+esc(s.label)+'</option>';
+    }).join('');
+  }
+
+  fillStatusSelect(r.statusKey);
+
+  jc.addEventListener('change',function(){
+    buildSiteSelect(js,jc.value,'');
   });
+
+  jt.addEventListener('change',function(){
+    fillStatusSelect(trackStatusKeys(jt.value)[0]);
+  });
+
+  openScrimModal('jobScrim','jobModal');
+  icons();
+
+  $('#jobClose').addEventListener('click',function(){
+    closeScrimModal('jobScrim','jobModal');
+  });
+
+  $('#jCancel').addEventListener('click',function(){
+    closeScrimModal('jobScrim','jobModal');
+  });
+
   if(!isNew){
-    var tl=$('#jTimeline'); var refresh=function(){ tl.innerHTML=timelineHtml(r); icons(); bindAttachmentLinks(tl); bindTimeline(r,tl,refresh); };
-    bindComposer('#jcComposer',function(type,html,text,files){ addComment(r,type,html,text,files,function(){ refresh(); }); }, refresh);
-    bindTimeline(r,tl,refresh); bindAttachmentLinks(tl);
+    var jd=$('#jDelete');
+
+    if(jd){
+      jd.addEventListener('click',function(){
+        confirmDel(
+          'Delete work?',
+          (r.wqRef||'This work')+' will be permanently removed.',
+          function(){
+            DB.works=DB.works.filter(function(x){
+              return x.id!==r.id;
+            });
+            save();
+            closeScrimModal('jobScrim','jobModal');
+            render();
+            toast('Work deleted');
+          }
+        );
+      });
+    }
+  }
+
+  $('#jSave').addEventListener('click',function(){
+    var prevDue=r.dueDate;
+    var prevValue=r.value;
+    var prevClient=r.clientId;
+    var prevSite=r.siteId;
+    var prevSupplier=r.supplierId;
+    var prevNext=r.nextAction;
+    var prevStage=r.stageOwner;
+    var prevTrack=jobTrack(r);
+
+    var nextTrack=(!isNew&&r.supplierId)
+      ?prevTrack
+      :jt.value;
+
+    var nextStatus=jst.value;
+
+    setJobStatus(r,nextStatus,function(){
+      r.track=nextTrack;
+      r.wqRef=$('#jWq').value.trim();
+      r.value=$('#jVal').value===''?'':+$('#jVal').value;
+      r.clientId=$('#jClient').value;
+      r.siteId=$('#jSite').value;
+      r.supplierId=$('#jSup').value;
+      r.client='';
+      r.site='';
+      r.supplier='';
+      r.description=$('#jDesc').value.trim();
+      r.stageOwner=$('#jStage').value.trim();
+      r.actionOwner=$('#jAction').value.trim();
+      r.nextAction=$('#jNext').value.trim();
+      r.dueDate=$('#jDue').value;
+      r.dateReceived=$('#jRec').value;
+      r.summary=$('#jSum').value.trim();
+
+      if(isNew){
+        DB.works.unshift(r);
+        logEvent(
+          r,
+          'Job created',
+          nextTrack==='reactive'?'Reactive':'Quote Request'
+        );
+      }else{
+        if(nextTrack!==prevTrack){
+          logEvent(
+            r,
+            'Job track',
+            nextTrack==='reactive'?'Reactive':'Quote Request'
+          );
+        }
+
+        if(r.dueDate!==prevDue){
+          logEvent(r,'Due date',fmtDate(r.dueDate));
+        }
+
+        if(String(r.value)!==String(prevValue)){
+          logEvent(r,'Value',money(r.value));
+        }
+
+        if(r.clientId!==prevClient){
+          logEvent(r,'Client',jobClient(r));
+        }
+
+        if(r.siteId!==prevSite){
+          logEvent(r,'Site',jobSite(r));
+        }
+
+        if(r.supplierId!==prevSupplier){
+          logEvent(r,'Supplier',jobSupplier(r));
+        }
+
+        if(r.nextAction!==prevNext){
+          logEvent(r,'Next action',r.nextAction||'');
+        }
+
+        if(r.stageOwner!==prevStage){
+          logEvent(r,'Stage owner',r.stageOwner||'');
+        }
+      }
+
+      save();
+      closeScrimModal('jobScrim','jobModal');
+      render();
+      toast(isNew?'Work added':'Work saved');
+    });
+  });
+
+  if(!isNew){
+    var tl=$('#jTimeline');
+
+    var refresh=function(){
+      tl.innerHTML=timelineHtml(r);
+      icons();
+      bindAttachmentLinks(tl);
+      bindTimeline(r,tl,refresh);
+    };
+
+    bindComposer(
+      '#jcComposer',
+      function(type,html,text,files){
+        addComment(r,type,html,text,files,function(){
+          refresh();
+        });
+      },
+      refresh
+    );
+
+    bindTimeline(r,tl,refresh);
+    bindAttachmentLinks(tl);
   }
 }
 function openDrawer(id){
