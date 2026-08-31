@@ -947,6 +947,21 @@ select.f:focus,
 .accent-swatch.blue{ background:oklch(0.560 0.130 247); }
 .accent-swatch.red{ background:oklch(0.570 0.155 24); }
 .accent-swatch.orange{ background:oklch(0.680 0.145 58); }
+.st-row{ display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--line-soft); }
+.st-row:first-child{ border-top:none; }
+.st-dot{ width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+.st-name{ flex:1 1 auto; min-width:0; padding:6px 9px; border:1px solid transparent; border-radius:var(--r-sm); background:transparent; font-size:0.86rem; }
+.st-name:hover{ border-color:var(--line); background:var(--paper); }
+.st-name:focus{ outline:none; border-color:var(--accent-line); box-shadow:0 0 0 3px var(--accent-soft); background:var(--paper); }
+.st-tag{ font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; padding:2px 8px; border-radius:20px; flex:0 0 auto; }
+.st-used{ font-size:0.72rem; color:var(--ink-3); flex:0 0 auto; font-variant-numeric:tabular-nums; }
+.st-row .icon-btn{ width:24px; height:24px; flex:0 0 auto; }
+.st-row .icon-btn i{ width:13px; height:13px; }
+.st-row .icon-btn[disabled]{ opacity:.3; cursor:default; }
+.st-add{ display:flex; gap:7px; flex-wrap:wrap; margin-top:10px; }
+.st-add input{ flex:1 1 130px; min-width:0; padding:8px 10px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--paper); outline:none; }
+.st-add select{ padding:8px 10px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--paper); outline:none; }
+.st-note{ font-size:0.74rem; color:var(--ink-3); margin-top:8px; }
 
 @media (max-width:880px){
   .app, .app.panel-open{ grid-template-columns:1fr; }
@@ -2912,11 +2927,242 @@ function storageMeterHtml(){
     '</div>';
 }
 function renderStorageMeter(el){ el.innerHTML=storageMeterHtml(); icons(); }
+/* ---- The status editor (V31.5.1B). Keys are permanent; labels, order and
+   track membership are the only editable parts. Every behaviour still reads
+   the fixed bucket, so renaming can never change how a status behaves. ---- */
+var STATUS_PHASES=[
+  {key:'pre-work',label:'Pre-work'},
+  {key:'delivery',label:'Delivery'},
+  {key:'finish',label:'Finish'}
+];
+var TRACK_LABELS={'quote-request':'Quote Request',reactive:'Reactive'};
+
+function companyStore(){
+  if(!DB.companySettings||typeof DB.companySettings!=='object')DB.companySettings={};
+  if(!Array.isArray(DB.companySettings.statusDefinitions)||!DB.companySettings.statusDefinitions.length){
+    DB.companySettings.statusDefinitions=DEFAULT_STATUS_DEFINITIONS.map(function(s){
+      return {key:s.key,label:s.label,bucket:s.bucket,phase:s.phase,tracks:s.tracks.slice(),order:s.order};
+    });
+  }
+  var seq=DB.companySettings.statusSequences;
+  if(!seq||!Array.isArray(seq['quote-request'])||!Array.isArray(seq.reactive)){
+    DB.companySettings.statusSequences={
+      'quote-request':DEFAULT_STATUS_SEQUENCES['quote-request'].slice(),
+      reactive:DEFAULT_STATUS_SEQUENCES.reactive.slice()
+    };
+  }
+  return DB.companySettings;
+}
+
+function statusExceptionKeys(){ return ['on-hold','cancelled']; }
+function isExceptionStatus(key){ return statusExceptionKeys().indexOf(key)>=0; }
+function jobsUsingStatus(key){ return (DB.works||[]).filter(function(w){ return w.statusKey===key; }).length; }
+
+function statusKeyFromLabel(label){
+  var base=String(label||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'status';
+  var taken={},key=base,n=2;
+  companyStore().statusDefinitions.forEach(function(s){ taken[s.key]=1; });
+  while(taken[key]){ key=base+'-'+n; n++; }
+  return key;
+}
+
+/* One flat order across both tracks, rebuilt from the sequences. The bucket is
+   never a sort key; the sequence is the order. */
+function resequenceStatusOrder(){
+  var store=companyStore(),order=0,seen={};
+  store.statusSequences['quote-request'].concat(store.statusSequences.reactive).forEach(function(key){
+    if(seen[key])return;
+    seen[key]=1;
+    var s=statusByKey(key);
+    if(s&&s.key===key)s.order=order++;
+  });
+  statusExceptionKeys().forEach(function(key){
+    var s=statusByKey(key);
+    if(s&&s.key===key)s.order=order++;
+  });
+}
+
+function syncStatusTracks(){
+  var store=companyStore();
+  store.statusDefinitions.forEach(function(s){
+    if(isExceptionStatus(s.key)){ s.tracks=['quote-request','reactive']; return; }
+    var tracks=[];
+    ['quote-request','reactive'].forEach(function(track){
+      if(store.statusSequences[track].indexOf(s.key)>=0)tracks.push(track);
+    });
+    s.tracks=tracks;
+  });
+}
+
+function commitStatusChange(){
+  syncStatusTracks();
+  resequenceStatusOrder();
+  save();
+  render();
+  openStatusPanel();
+}
+
+function addTrackStatus(track,label,bucket,phase){
+  label=String(label||'').trim();
+  if(!label){ toast('Give the status a name'); return false; }
+  var store=companyStore();
+  var clash=store.statusDefinitions.some(function(s){
+    return s.label.toLowerCase()===label.toLowerCase();
+  });
+  if(clash){ toast('A status called '+label+' already exists'); return false; }
+  var key=statusKeyFromLabel(label);
+  store.statusDefinitions.push({key:key,label:label,bucket:bucket,phase:phase,tracks:[track],order:999});
+  store.statusSequences[track].push(key);
+  commitStatusChange();
+  toast(label+' added to '+TRACK_LABELS[track]);
+  return true;
+}
+
+function renameStatus(key,label){
+  label=String(label||'').trim();
+  var s=statusByKey(key);
+  if(!s||s.key!==key||!label||label===s.label)return false;
+  s.label=label;
+  (DB.works||[]).forEach(function(w){ if(w.statusKey===key)w.status=label; });
+  commitStatusChange();
+  toast('Status renamed');
+  return true;
+}
+
+function moveTrackStatus(track,key,delta){
+  var seq=companyStore().statusSequences[track];
+  var i=seq.indexOf(key),j=i+delta;
+  if(i<0||j<0||j>=seq.length)return false;
+  seq.splice(j,0,seq.splice(i,1)[0]);
+  commitStatusChange();
+  return true;
+}
+
+function removeStatus(key){
+  var store=companyStore(),s=statusByKey(key);
+  if(!s||s.key!==key)return false;
+  if(isExceptionStatus(key)){
+    toast(s.label+' is a shared exception status and cannot be removed');
+    return false;
+  }
+  var used=jobsUsingStatus(key);
+  if(used){
+    toast(s.label+' is used by '+used+' job'+(used===1?'':'s')+'. Move them first.');
+    return false;
+  }
+  if(s.bucket==='closed'){
+    var others=store.statusDefinitions.filter(function(x){
+      return x.key!==key&&x.bucket==='closed'&&!isExceptionStatus(x.key);
+    });
+    if(!others.length){
+      toast('At least one Closed status must remain');
+      return false;
+    }
+  }
+  ['quote-request','reactive'].forEach(function(track){
+    store.statusSequences[track]=store.statusSequences[track].filter(function(x){ return x!==key; });
+  });
+  store.statusDefinitions=store.statusDefinitions.filter(function(x){ return x.key!==key; });
+  commitStatusChange();
+  toast(s.label+' removed from both tracks');
+  return true;
+}
+
+function statusRowHtml(track,key,index,total){
+  var s=statusByKey(key);
+  if(!s||s.key!==key)return '';
+  var m=statusDefinitionVisualMeta(s),used=jobsUsingStatus(key);
+  var shared=(s.tracks||[]).length>1&&!isExceptionStatus(key);
+  return '<div class="st-row">'+
+    '<span class="st-dot" style="background:'+m.c+'"></span>'+
+    '<input class="st-name" value="'+esc(s.label)+'" data-status-rename="'+esc(key)+'" aria-label="Status name">'+
+    '<span class="st-tag" style="color:'+m.c+';background:'+m.bg+'">'+esc(m.label)+'</span>'+
+    '<span class="st-used">'+(used?used+' job'+(used===1?'':'s'):(shared?'shared':'unused'))+'</span>'+
+    (track
+      ?'<button class="icon-btn" data-status-up="'+esc(track+'|'+key)+'" title="Move up"'+(index===0?' disabled':'')+'><i data-lucide="chevron-up"></i></button>'+
+       '<button class="icon-btn" data-status-down="'+esc(track+'|'+key)+'" title="Move down"'+(index===total-1?' disabled':'')+'><i data-lucide="chevron-down"></i></button>'+
+       '<button class="icon-btn del" data-status-del="'+esc(key)+'" title="Remove"><i data-lucide="trash-2"></i></button>'
+      :'')+
+  '</div>';
+}
+
+function statusTrackSectionHtml(track){
+  var keys=companyStore().statusSequences[track];
+  return '<div class="pgrp">'+
+    '<h3>'+esc(TRACK_LABELS[track])+'</h3>'+
+    '<p>Start to finish. This order drives the pill and the suggested next step.</p>'+
+    keys.map(function(key,i){ return statusRowHtml(track,key,i,keys.length); }).join('')+
+    '<div class="st-add">'+
+      '<input id="stAdd-'+track+'" placeholder="New status name">'+
+      '<select id="stBucket-'+track+'">'+STATUS_BUCKETS.map(function(b){
+        return '<option value="'+esc(b.key)+'"'+(b.key==='active'?' selected':'')+'>'+esc(b.label)+'</option>';
+      }).join('')+'</select>'+
+      '<select id="stPhase-'+track+'">'+STATUS_PHASES.map(function(p){
+        return '<option value="'+esc(p.key)+'"'+(p.key==='delivery'?' selected':'')+'>'+esc(p.label)+'</option>';
+      }).join('')+'</select>'+
+      '<button class="btn pri sm" data-status-add="'+esc(track)+'"><i data-lucide="plus"></i>Add</button>'+
+    '</div>'+
+  '</div>';
+}
+
+function statusPanelHtml(){
+  var exceptions=statusExceptionKeys();
+  return statusTrackSectionHtml('quote-request')+
+    statusTrackSectionHtml('reactive')+
+    '<div class="pgrp">'+
+      '<h3>Shared exceptions</h3>'+
+      '<p>Available on both tracks, outside the normal sequence. Rename them if you like; they cannot be removed.</p>'+
+      exceptions.map(function(key){ return statusRowHtml('',key,0,1); }).join('')+
+      '<div class="st-note">Buckets control behaviour: which clock runs, whether a job counts as finished, and whether hide-completed buries it. Renaming a status never changes that.</div>'+
+    '</div>';
+}
+
+function openStatusPanel(){
+  openPanel('statuses','Job statuses',statusPanelHtml(),function(el){
+    $$('[data-status-rename]',el).forEach(function(input){
+      input.addEventListener('change',function(){
+        if(!renameStatus(input.getAttribute('data-status-rename'),input.value))openStatusPanel();
+      });
+      input.addEventListener('keydown',function(e){
+        if(e.key==='Enter'){ e.preventDefault(); input.blur(); }
+        if(e.key==='Escape')openStatusPanel();
+      });
+    });
+    $$('[data-status-up]',el).forEach(function(b){
+      b.addEventListener('click',function(){
+        var p=b.getAttribute('data-status-up').split('|');
+        moveTrackStatus(p[0],p[1],-1);
+      });
+    });
+    $$('[data-status-down]',el).forEach(function(b){
+      b.addEventListener('click',function(){
+        var p=b.getAttribute('data-status-down').split('|');
+        moveTrackStatus(p[0],p[1],1);
+      });
+    });
+    $$('[data-status-del]',el).forEach(function(b){
+      b.addEventListener('click',function(){
+        var key=b.getAttribute('data-status-del'),s=statusByKey(key);
+        if(!s||s.key!==key)return;
+        if(isExceptionStatus(key)||jobsUsingStatus(key)){ removeStatus(key); return; }
+        confirmDel('Remove '+s.label+'?','It is removed from both tracks. Jobs are unaffected because none use it.',function(){ removeStatus(key); },'Remove');
+      });
+    });
+    $$('[data-status-add]',el).forEach(function(b){
+      b.addEventListener('click',function(){
+        var track=b.getAttribute('data-status-add');
+        addTrackStatus(track,$('#stAdd-'+track).value,$('#stBucket-'+track).value,$('#stPhase-'+track).value);
+      });
+    });
+  });
+}
 function viewSettings(){
   var theme=(DB.settings&&DB.settings.theme)||'system';
   return '<div style="max-width:720px">'+
     '<div class="panel" style="margin-bottom:16px" id="storageMeterWrap">'+storageMeterHtml()+'</div>'+
     '<div class="panel" style="margin-bottom:16px" id="driveWrap">'+drivePanelHtml()+'</div>'+
+      '<div class="panel" style="margin-bottom:16px"><div class="ph"><div><h3>Job statuses</h3><p>Rename, reorder, add and remove the statuses on each job track. Jobs keep their place because every status has a permanent key.</p></div></div>'+
+    '<button class="btn pri" id="openStatusEditor"><i data-lucide="list-checks"></i>Edit job statuses</button></div>'+
     '<div class="panel" style="margin-bottom:16px"><div class="ph"><div><h3>Accent colour</h3><p>Changes selected navigation, primary actions, job references and other interface highlights. Status colours stay fixed.</p></div></div>'+
     '<div class="accent-picker" id="accentPicker">'+
     [['green','Green'],['blue','Blue'],['red','Red'],['orange','Orange']].map(function(a){return '<button type="button" class="accent-choice '+(appearanceAccent()===a[0]?'on':'')+'" data-accent-opt="'+a[0]+'"><span class="accent-swatch '+a[0]+'"></span>'+a[1]+'</button>';}).join('')+
@@ -3235,6 +3481,7 @@ if((b=e.target.closest('[data-editscp]'))){
   } else if(view==='settings'){
     c.onclick=function(e){
       var th=e.target.closest('[data-theme-opt]'); if(th){ DB.settings.theme=th.getAttribute('data-theme-opt'); save(); applyTheme(); render(); return; }
+      if(e.target.closest('#openStatusEditor')){ openStatusPanel(); return; }
       if(e.target.closest('#addTradeBtn')){ addMasterTrade(); return; }
       var rm=e.target.closest('[data-rmmaster]'); if(rm){ var t=rm.getAttribute('data-rmmaster'); DB.trades=DB.trades.filter(function(x){return x!==t;}); DB.scps.forEach(function(s){ s.trades=s.trades.filter(function(x){return x.trade!==t;}); }); save(); render(); toast('Trade removed from master list'); return; }
       if(e.target.closest('#exportBtn')){ exportBackup(); return; }
