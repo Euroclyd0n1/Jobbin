@@ -1043,21 +1043,28 @@ var STATUS_BUCKETS=[
 ];
 
 var DEFAULT_STATUS_DEFINITIONS=[
-  {key:'awaiting-review',label:'Awaiting review',bucket:'open',order:0},
-  {key:'awaiting-survey-eta',label:'Awaiting survey ETA',bucket:'active',order:1},
-  {key:'awaiting-survey',label:'Awaiting survey',bucket:'active',order:2},
-  {key:'awaiting-quote',label:'Awaiting quote',bucket:'active',order:3},
-  {key:'awaiting-quote-approval',label:'Awaiting quote approval',bucket:'active',order:4},
-  {key:'quote-approved',label:'Quote approved',bucket:'active',order:5},
-  {key:'awaiting-eta',label:'Awaiting ETA',bucket:'active',order:6},
-  {key:'in-progress',label:'In progress',bucket:'active',order:7},
-  {key:'awaiting-worksheets',label:'Awaiting worksheets',bucket:'active',order:8},
-  {key:'completed',label:'Completed',bucket:'done',order:9},
-  {key:'invoiced',label:'Invoiced',bucket:'closed',order:10},
-  {key:'closed',label:'Closed',bucket:'closed',order:11},
-  {key:'cancelled',label:'Cancelled',bucket:'closed',order:12},
-  {key:'on-hold',label:'On Hold',bucket:'on-hold',order:13}
+  {key:'awaiting-review',label:'Awaiting review',bucket:'open',phase:'pre-work',tracks:['quote-request'],order:0},
+  {key:'awaiting-survey-eta',label:'Awaiting survey ETA',bucket:'active',phase:'pre-work',tracks:['quote-request'],order:1},
+  {key:'awaiting-survey',label:'Awaiting survey',bucket:'active',phase:'pre-work',tracks:['quote-request'],order:2},
+  {key:'awaiting-quote',label:'Awaiting quote',bucket:'active',phase:'pre-work',tracks:['quote-request'],order:3},
+  {key:'awaiting-quote-approval',label:'Awaiting quote approval',bucket:'active',phase:'pre-work',tracks:['quote-request'],order:4},
+  {key:'quote-approved',label:'Quote approved',bucket:'active',phase:'delivery',tracks:['quote-request'],order:5},
+  {key:'awaiting-works-eta',label:'Awaiting works ETA',bucket:'active',phase:'delivery',tracks:['quote-request'],order:6},
+  {key:'awaiting-eta',label:'Awaiting ETA',bucket:'active',phase:'delivery',tracks:['reactive'],order:7},
+  {key:'awaiting-attendance',label:'Awaiting attendance',bucket:'active',phase:'delivery',tracks:['quote-request','reactive'],order:8},
+  {key:'awaiting-worksheets',label:'Awaiting worksheets',bucket:'active',phase:'delivery',tracks:['quote-request','reactive'],order:9},
+  {key:'completed',label:'Completed',bucket:'done',phase:'finish',tracks:['quote-request','reactive'],order:10},
+  {key:'invoiced',label:'Invoiced',bucket:'closed',phase:'finish',tracks:['quote-request','reactive'],order:11},
+  {key:'closed',label:'Closed',bucket:'closed',phase:'finish',tracks:['quote-request','reactive'],order:12},
+  {key:'cancelled',label:'Cancelled',bucket:'closed',phase:'exception',tracks:['quote-request','reactive'],order:13},
+  {key:'on-hold',label:'On Hold',bucket:'on-hold',phase:'exception',tracks:['quote-request','reactive'],order:14}
 ];
+
+var DEFAULT_STATUS_SEQUENCES={
+  'quote-request':['awaiting-survey-eta','awaiting-survey','awaiting-quote','awaiting-quote-approval','quote-approved','awaiting-works-eta','awaiting-attendance','awaiting-worksheets','completed','invoiced','closed'],
+  reactive:['awaiting-eta','awaiting-attendance','awaiting-worksheets','completed','invoiced','closed']
+};
+
 
 /* Temporary compatibility lists until every behaviour reads status buckets. */
 var CLOSED=['Completed','Invoiced'];
@@ -1376,7 +1383,7 @@ function setAppearanceAccent(accent){
   if(view==='settings')render();
 }
 function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},companySettings:{},userPrefs:{},schemaVersion:1}; }
-var CURRENT_SCHEMA_VERSION=6;
+var CURRENT_SCHEMA_VERSION=7;
 var MIGRATIONS=[
   // v1 -> v2: give every supply-chain partner an empty structured coverage list
   function(data){
@@ -1458,6 +1465,30 @@ var MIGRATIONS=[
       }
     });
 
+    return data;
+  },
+  // v6 -> v7: add Quote Request and Reactive tracks, visual phases,
+  // per-track sequences, cancellation history and return-from-hold state
+  function(data){
+    if(!data.companySettings||typeof data.companySettings!=='object') data.companySettings={};
+    data.companySettings.statusDefinitions=DEFAULT_STATUS_DEFINITIONS.map(function(s){
+      return {key:s.key,label:s.label,bucket:s.bucket,phase:s.phase,tracks:s.tracks.slice(),order:s.order};
+    });
+    data.companySettings.statusSequences={
+      'quote-request':DEFAULT_STATUS_SEQUENCES['quote-request'].slice(),
+      reactive:DEFAULT_STATUS_SEQUENCES.reactive.slice()
+    };
+
+    var remap={'awaiting-eta':'awaiting-works-eta','in-progress':'awaiting-attendance'};
+    var valid={};
+    data.companySettings.statusDefinitions.forEach(function(s){ valid[s.key]=true; });
+    (data.works||[]).forEach(function(w){
+      w.track='quote-request';
+      w.statusKey=remap[w.statusKey]||w.statusKey||'awaiting-survey-eta';
+      if(!valid[w.statusKey]) w.statusKey='awaiting-survey-eta';
+      if(!Array.isArray(w.cancellations)) w.cancellations=[];
+      if(!('preHoldStatusKey' in w)) w.preHoldStatusKey='';
+    });
     return data;
   }
 ];
