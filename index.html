@@ -947,10 +947,12 @@ select.f:focus,
 .accent-swatch.blue{ background:oklch(0.560 0.130 247); }
 .accent-swatch.red{ background:oklch(0.570 0.155 24); }
 .accent-swatch.orange{ background:oklch(0.680 0.145 58); }
-.st-row{ display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--line-soft); }
+.st-row{ display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; padding:9px 0; border-top:1px solid var(--line-soft); }
 .st-row:first-child{ border-top:none; }
+.st-ctrls{ display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1 1 100%; padding-left:16px; }
+.st-acts{ display:flex; align-items:center; gap:4px; flex:0 0 auto; margin-left:auto; }
 .st-dot{ width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
-.st-name{ flex:1 1 auto; min-width:0; padding:6px 9px; border:1px solid transparent; border-radius:var(--r-sm); background:transparent; font-size:0.86rem; }
+.st-name{ flex:1 1 auto; min-width:0; padding:5px 9px; border:1px solid transparent; border-radius:var(--r-sm); background:transparent; font-size:0.9rem; font-weight:600; }
 .st-name:hover{ border-color:var(--line); background:var(--paper); }
 .st-name:focus{ outline:none; border-color:var(--accent-line); box-shadow:0 0 0 3px var(--accent-soft); background:var(--paper); }
 .st-tag{ font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; padding:2px 8px; border-radius:20px; flex:0 0 auto; }
@@ -3191,17 +3193,28 @@ function statusRowHtml(track,key,index,total){
   var m=statusDefinitionVisualMeta(s),used=jobsUsingStatus(key);
   var shared=statusTrackList(key).length>1&&!isExceptionStatus(key);
   var other=track==='reactive'?'quote-request':'reactive';
+  /* The name is the only thing on this row that must always be readable, so
+     everything to its right lives in one group. The group wraps to a second
+     line as a unit; the name never shrinks to make room for it. */
+  /* Two deliberate lines, never a width-dependent wrap. The name owns the
+     first line so it reads first. The second line carries the stage and job
+     count on the left, with the buttons pushed away to the right so they
+     never crowd the wording. */
   return '<div class="st-row">'+
     '<span class="st-dot" style="background:'+m.c+'"></span>'+
     '<input class="st-name" value="'+esc(s.label)+'" data-status-rename="'+esc(key)+'" aria-label="Status name">'+
-    '<span class="st-tag" style="color:'+m.c+';background:'+m.bg+'">'+esc(m.label)+'</span>'+
+    '<span class="st-ctrls">'+
+      '<span class="st-tag" style="color:'+m.c+';background:'+m.bg+'">'+esc(m.label)+'</span>'+
       '<span class="st-used">'+(used?used+' job'+(used===1?'':'s'):'no jobs')+'</span>'+
-    (track
-        ?'<button class="btn sm st-share'+(shared?' on':'')+'" data-status-share="'+esc(other+'|'+key)+'" title="'+(shared?'Stop using it on '+esc(TRACK_LABELS[other]):'Also use it on '+esc(TRACK_LABELS[other]))+'">'+(shared?'− ':'+ ')+esc(TRACK_LABELS[other])+'</button>'+
-         '<button class="icon-btn" data-status-up="'+esc(track+'|'+key)+'" title="Move up"'+(index===0?' disabled':'')+'><i data-lucide="chevron-up"></i></button>'+
-       '<button class="icon-btn" data-status-down="'+esc(track+'|'+key)+'" title="Move down"'+(index===total-1?' disabled':'')+'><i data-lucide="chevron-down"></i></button>'+
-       '<button class="icon-btn del" data-status-del="'+esc(key)+'" title="Remove"><i data-lucide="trash-2"></i></button>'
-      :'')+
+      (track
+        ?'<span class="st-acts">'+
+           '<button class="btn sm st-share'+(shared?' on':'')+'" data-status-share="'+esc(other+'|'+key)+'" title="'+(shared?'Stop using it on '+esc(TRACK_LABELS[other]):'Also use it on '+esc(TRACK_LABELS[other]))+'">'+(shared?'− ':'+ ')+esc(TRACK_LABELS[other])+'</button>'+
+           '<button class="icon-btn" data-status-up="'+esc(track+'|'+key)+'" title="Move up"'+(index===0?' disabled':'')+'><i data-lucide="chevron-up"></i></button>'+
+           '<button class="icon-btn" data-status-down="'+esc(track+'|'+key)+'" title="Move down"'+(index===total-1?' disabled':'')+'><i data-lucide="chevron-down"></i></button>'+
+           '<button class="icon-btn del" data-status-del="'+esc(key)+'" title="Remove"><i data-lucide="trash-2"></i></button>'+
+         '</span>'
+        :'')+
+    '</span>'+
   '</div>';
 }
 
