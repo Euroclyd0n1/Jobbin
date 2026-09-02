@@ -3226,15 +3226,10 @@ function statusTrackSectionHtml(track){
 
 function statusPanelHtml(){
   var exceptions=statusExceptionKeys();
-  return statusTrackSectionHtml('quote-request')+
-    statusTrackSectionHtml('reactive')+
-    '<div class="pgrp">'+
-      '<h3>Shared exceptions</h3>'+
-      '<p>Available on both tracks, outside the normal sequence. Rename them if you like; they cannot be removed.</p>'+
-      exceptions.map(function(key){ return statusRowHtml('',key,0,1); }).join('')+
-      '<div class="st-note">Renaming a status never changes how it behaves. What it does comes from its stage, which is fixed when you create it.</div>'+
-    '</div>'+
-    '<div class="pgrp">'+
+  /* The legend reads first because you need it while choosing a stage, not
+     after scrolling past every list. Its coloured tags double as the key for
+     the stage tag on every row below. */
+  return '<div class="pgrp">'+
       '<h3>What the stages mean</h3>'+
       STATUS_STAGES.map(function(p){
         var m=statusDefinitionVisualMeta({bucket:p.bucket,phase:p.phase});
@@ -3243,6 +3238,14 @@ function statusPanelHtml(){
           '<span class="st-hint">'+esc(p.hint)+'</span>'+
         '</div>';
       }).join('')+
+    '</div>'+
+    statusTrackSectionHtml('quote-request')+
+    statusTrackSectionHtml('reactive')+
+    '<div class="pgrp">'+
+      '<h3>Shared exceptions</h3>'+
+      '<p>Available on both tracks, outside the normal sequence. Rename them if you like; they cannot be removed.</p>'+
+      exceptions.map(function(key){ return statusRowHtml('',key,0,1); }).join('')+
+      '<div class="st-note">Renaming a status never changes how it behaves. What it does comes from its stage, which is fixed when you create it.</div>'+
     '</div>';
 }
 
