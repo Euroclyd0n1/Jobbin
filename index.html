@@ -3193,13 +3193,10 @@ function statusRowHtml(track,key,index,total){
   var m=statusDefinitionVisualMeta(s),used=jobsUsingStatus(key);
   var shared=statusTrackList(key).length>1&&!isExceptionStatus(key);
   var other=track==='reactive'?'quote-request':'reactive';
-  /* The name is the only thing on this row that must always be readable, so
-     everything to its right lives in one group. The group wraps to a second
-     line as a unit; the name never shrinks to make room for it. */
   /* Two deliberate lines, never a width-dependent wrap. The name owns the
-     first line so it reads first. The second line carries the stage and job
-     count on the left, with the buttons pushed away to the right so they
-     never crowd the wording. */
+     first line so it reads first, at any panel width. The second line keeps
+     the stage and its job count together on the left, with the buttons pushed
+     away to the right so they never crowd the wording. */
   return '<div class="st-row">'+
     '<span class="st-dot" style="background:'+m.c+'"></span>'+
     '<input class="st-name" value="'+esc(s.label)+'" data-status-rename="'+esc(key)+'" aria-label="Status name">'+
