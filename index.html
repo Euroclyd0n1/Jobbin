@@ -4069,7 +4069,7 @@ function openJob(id){
       (canApproveRestrictedJob()&&clientsWithRestrictedSites().length?'<button type="button" class="btn" id="jApproveException">Approve one restricted job</button>':'')+
       active.map(function(a){
         return '<p class="st-note"><strong>'+esc(a.label+' exception: '+a.name)+'</strong><br>'+
-          esc(a.reason)+(canApproveRestrictedJob()?' <button type="button" class="btn sm" data-remove-exception="'+esc(a.id)+'">Remove exception</button>':'')+'</p>';
+          esc(a.reason)+'</p>';
       }).join('')+
       ((active.length||clientsWithRestrictedSites().length||draftExceptions.length||(r.workExceptions||[]).length)
         ?'<p class="st-note">Exception changes take effect when you save this job.</p>'
@@ -4090,19 +4090,6 @@ function openJob(id){
         refreshJobBuildingWarning();
         refreshExceptionControls();
         toast('Exception prepared. Save the job to apply it.');
-      });
-    });
-    $$('[data-remove-exception]',$('#jExceptionControls')).forEach(function(button){
-      button.addEventListener('click',function(){
-        if(!canApproveRestrictedJob())return;
-        var id=button.getAttribute('data-remove-exception');
-        confirmDel('Remove this job exception?',
-          'The directory restriction stays in place. Its reason remains in history when you save. Existing jobs are not cancelled or stopped.',
-          function(){
-            if(!canApproveRestrictedJob())return;
-            draftExceptions=draftExceptions.filter(function(a){return a.id!==id;});
-            refreshExceptionControls();
-          },'Remove exception');
       });
     });
   }
