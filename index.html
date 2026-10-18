@@ -1378,17 +1378,140 @@ function openLifeMenu(anchor,key){
   function sync(){input.disabled=!toggle.checked;}
   toggle.addEventListener('change',sync);sync();
 }
-function jobLinkBlock(previous,next){
-  var old=previous||{},c=next.clientId?clientById(next.clientId):null;
+function canApproveRestrictedJob(){ return true; } // Replace with real permissions when accounts exist.
+function jobRestrictionRecords(w){
+  var hit=w.siteId?siteById(w.siteId):null;
+  return [
+    {kind:'client',label:'Client',record:w.clientId?clientById(w.clientId):(hit&&hit.client)},
+    {kind:'site',label:'Site',record:hit&&hit.site},
+    {kind:'contractor',label:'Contractor',record:w.supplierId?scpById(w.supplierId):null}
+  ];
+}
+function matchingWorkException(w,item,approvals){
+  if(!item.record||isOffered(item.record))return null;
+  return (approvals||w.workExceptions||[]).find(function(a){
+    return a.jobId===w.id&&a.kind===item.kind&&a.recordId===item.record.id&&
+      a.stopOn===dirStopDate(item.record)&&
+      (item.kind!=='client'||a.siteId===(w.siteId||''))&&
+      typeof a.reason==='string'&&a.reason.trim();
+  })||null;
+}
+function jobLinkBlock(previous,next,approvals){
+  var old=previous||{},probe=Object.assign({},next,{id:next.id||old.id});
   var hit=next.siteId?siteById(next.siteId):null;
-  var supplier=next.supplierId?scpById(next.supplierId):null;
-  if(next.clientId&&next.clientId!==old.clientId&&(!c||!isOffered(c)))return 'This client is not accepting new work.';
-  if(next.siteId&&(next.siteId!==old.siteId||next.clientId!==old.clientId)){
-    if(!hit||hit.client.id!==next.clientId)return 'Choose a site belonging to this client.';
-    if(dirBlock(hit.site,hit.client))return 'This site or its client is not accepting new work.';
+  if(next.clientId&&!clientById(next.clientId))return 'Choose an existing client.';
+  if(next.siteId&&(!hit||hit.client.id!==next.clientId))return 'Choose a site belonging to this client.';
+  if(next.supplierId&&!scpById(next.supplierId))return 'Choose an existing contractor.';
+  var records=jobRestrictionRecords(probe),changes={
+    client:next.clientId!==old.clientId||next.siteId!==old.siteId,
+    site:next.siteId!==old.siteId||next.clientId!==old.clientId,
+    contractor:next.supplierId!==old.supplierId
+  };
+  for(var i=0;i<records.length;i++){
+    var item=records[i];
+    if(item.record&&changes[item.kind]&&!isOffered(item.record)&&
+      !matchingWorkException(probe,item,approvals||old.workExceptions||[])){
+      return item.label+' is not accepting new work. Use Approve one restricted job.';
+    }
   }
-  if(next.supplierId&&next.supplierId!==old.supplierId&&(!supplier||!isOffered(supplier)))return 'This contractor is not accepting new work.';
   return '';
+}
+function retainedWorkExceptions(w,approvals){
+  var records=jobRestrictionRecords(w);
+  return (approvals||[]).filter(function(a){
+    return records.some(function(item){return matchingWorkException(w,item,[a])===a;});
+  });
+}
+function saveWorkExceptions(w,approvals){
+  var before=w.workExceptions||[],after=retainedWorkExceptions(w,approvals);
+  function detail(a){return a.label+' '+a.name+'; no new work from '+fmtDate(a.stopOn)+
+    '; recorded by '+a.by+'; reason: '+a.reason;}
+  before.forEach(function(a){
+    if(!after.some(function(b){return b.id===a.id;}))logEvent(w,'Job exception removed',detail(a));
+  });
+  after.forEach(function(a){
+    if(!before.some(function(b){return b.id===a.id;}))logEvent(w,'Job exception approved',detail(a));
+  });
+  w.workExceptions=after;
+}
+function clientsWithRestrictedSites(){
+  return (DB.clients||[]).filter(function(client){
+    return sitesUnder(client).some(function(site){
+      return !!dirBlock(site,client);
+    });
+  });
+}
+function requestWorkException(w,onApproved){
+  if(!canApproveRestrictedJob()){toast('You cannot approve restricted jobs.');return;}
+  var eligibleClients=clientsWithRestrictedSites();
+  if(!eligibleClients.length){toast('There are no currently restricted sites.');return;}
+  function options(records,key,current){
+    return '<option value="">None</option>'+records.map(function(rec){
+      var name=rec[key]||'',date=dirStopDate(rec);
+      return '<option value="'+esc(rec.id)+'"'+(rec.id===current?' selected':'')+'>'+
+        esc(name+(date?' · No new work from '+fmtDate(date):''))+'</option>';
+    }).join('');
+  }
+  openAdd('Approve one restricted job',
+    '<p class="st-note">Choose the records for this job only. Their restrictions stay in place for every other job. Building access warnings still apply.</p>'+
+    '<div class="field"><label>Client</label><select id="exClient">'+options(eligibleClients,'name',w.clientId)+'</select></div>'+
+    '<div class="field"><label>Site</label><select id="exSite"></select></div>'+
+    '<div class="field"><label>Contractor</label><select id="exSupplier">'+options(DB.scps||[],'company',w.supplierId)+'</select></div>'+
+    '<div class="field"><label>Why is this job approved, and who approved it?</label><textarea id="exReason"></textarea></div>'+
+    '<p class="st-note">Approval is only saved when you save the job.</p>',
+    function(){
+      var next={id:w.id,clientId:$('#exClient').value,siteId:$('#exSite').value,supplierId:$('#exSupplier').value};
+      var reason=$('#exReason').value.trim();
+      if(!reason){toast('Enter the reason and who approved this job.');return false;}
+      var hit=next.siteId?siteById(next.siteId):null;
+      if(next.siteId&&(!hit||hit.client.id!==next.clientId)){toast('Choose a site belonging to this client.');return false;}
+      var blocked=jobRestrictionRecords(next).filter(function(item){return item.record&&!isOffered(item.record);});
+      if(!blocked.length){toast('These records have no active restriction. Use the normal job fields.');return false;}
+      var summary=blocked.map(function(item){
+        return item.label+': '+(item.record.name||item.record.company)+'; no new work from '+fmtDate(dirStopDate(item.record));
+      }).join('\n');
+      var stamp=blocked.map(function(item){return item.kind+':'+item.record.id+':'+dirStopDate(item.record);}).join('|');
+      confirmDel('Review this job exception',summary+'\n\nReason: '+reason,function(){
+        confirmDel('Proceed despite these restrictions?',
+          summary+'\n\nThis job will proceed despite these restrictions. Every other job remains restricted.\n\nReason: '+reason,
+          function(){
+            if(!canApproveRestrictedJob()){toast('You cannot approve restricted jobs.');return;}
+            var current=jobRestrictionRecords(next).filter(function(item){return item.record&&!isOffered(item.record);});
+            var now=current.map(function(item){return item.kind+':'+item.record.id+':'+dirStopDate(item.record);}).join('|');
+            if(now!==stamp){toast('The restrictions changed. Review the exception again.');return;}
+            var who=currentUser();
+            var approvals=current.map(function(item){
+              return {id:uid(),jobId:w.id,kind:item.kind,label:item.label,recordId:item.record.id,
+                siteId:next.siteId||'',name:item.record.name||item.record.company,
+                stopOn:dirStopDate(item.record),reason:reason,by:who.name,byId:who.id,t:Date.now()};
+            });
+            if(jobLinkBlock(null,next,approvals)){toast('The selected records changed. Review the exception again.');return;}
+            onApproved(next,approvals);
+          },'Approve this job only');
+      },'Continue to final confirmation');
+    });
+  $('#addSave').textContent='Review exception';
+  function fillSites(keep){
+    var c=clientById($('#exClient').value);
+    var restricted=c?sitesUnder(c).filter(function(site){
+      return !!dirBlock(site,c);
+    }):[];
+    var select=$('#exSite');
+    select.innerHTML=
+      '<option value="">'+
+        (!c?'Choose a client first':restricted.length?'Select a restricted site':'No currently restricted sites')+
+      '</option>'+
+      restricted.map(function(site){
+        var block=dirBlock(site,c);
+        var label=site.name+' · No new work from '+fmtDate(dirStopDate(block.rec))+
+          (block.by==='parent'?' · via client':'');
+        return '<option value="'+esc(site.id)+'"'+
+          (site.id===keep?' selected':'')+'>'+esc(label)+'</option>';
+      }).join('');
+    select.disabled=!restricted.length;
+  }
+  fillSites(w.siteId);
+  $('#exClient').addEventListener('change',function(){fillSites('');});
 }
 /* Capture phase, so a badge inside a collapsible row never toggles it. */
 document.addEventListener('click',function(e){
@@ -1529,7 +1652,7 @@ function setAppearanceAccent(accent){
   if(view==='settings')render();
 }
 function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},companySettings:{},userPrefs:{},schemaVersion:1}; }
-var CURRENT_SCHEMA_VERSION=10;
+var CURRENT_SCHEMA_VERSION=11;
 var MIGRATIONS=[
   // v1 -> v2: give every supply-chain partner an empty structured coverage list
   function(data){
@@ -1679,6 +1802,13 @@ var MIGRATIONS=[
       (c.managers||[]).forEach(function(m){(m.sites||[]).forEach(upgrade);});
     });
     (data.scps||[]).forEach(upgrade);
+    return data;
+  },
+  // v10 -> v11: approvals belong to individual jobs, never directory records.
+  function(data){
+    (data.works||[]).forEach(function(w){
+      if(!Array.isArray(w.workExceptions))w.workExceptions=[];
+    });
     return data;
   }
 ];
@@ -3831,6 +3961,7 @@ function openJob(id){
   if(!r)return;
 
   var m=$('#jobModal');
+  var draftExceptions=(r.workExceptions||[]).slice();
   var track=jobTrack(r);
 
   m.innerHTML=
@@ -3864,8 +3995,9 @@ function openJob(id){
           '</select>'+
         '</div>'+
       '</div>'+
+      '<div id="jExceptionControls"></div>'+
+      '<div id="jCutoffWarnings"></div>'+
       cancellationNoteHtml(r)+
-      (isNew?'':jobWorkCutoffHtml(r))+
       '<div class="field"><label>Status</label><select id="jStatus"></select></div>'+
       '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
       '<div class="grid-2">'+
@@ -3928,9 +4060,59 @@ function openJob(id){
 
   fillStatusSelect(r.statusKey);
 
+  function exceptionProbe(){
+    return {id:r.id,clientId:jc.value,siteId:js.value,supplierId:$('#jSup').value,workExceptions:draftExceptions};
+  }
+  function refreshExceptionControls(){
+    var probe=exceptionProbe(),active=retainedWorkExceptions(probe,draftExceptions);
+    $('#jExceptionControls').innerHTML=
+      (canApproveRestrictedJob()&&clientsWithRestrictedSites().length?'<button type="button" class="btn" id="jApproveException">Approve one restricted job</button>':'')+
+      active.map(function(a){
+        return '<p class="st-note"><strong>'+esc(a.label+' exception: '+a.name)+'</strong><br>'+
+          esc(a.reason)+(canApproveRestrictedJob()?' <button type="button" class="btn sm" data-remove-exception="'+esc(a.id)+'">Remove exception</button>':'')+'</p>';
+      }).join('')+
+      ((active.length||clientsWithRestrictedSites().length||draftExceptions.length||(r.workExceptions||[]).length)
+        ?'<p class="st-note">Exception changes take effect when you save this job.</p>'
+        :'');
+    $('#jCutoffWarnings').innerHTML=jobWorkCutoffHtml(probe,isNew);
+    var approve=$('#jApproveException');
+    if(approve)approve.addEventListener('click',function(){
+      requestWorkException(probe,function(next,approvals){
+        if(!m.classList.contains('show'))return;
+        draftExceptions=retainedWorkExceptions(next,draftExceptions);
+        approvals.forEach(function(a){
+          draftExceptions=draftExceptions.filter(function(b){return b.kind!==a.kind||b.recordId!==a.recordId;});
+          draftExceptions.push(a);
+        });
+        buildClientSelect(jc,next.clientId);
+        buildSiteSelect(js,next.clientId,next.siteId);
+        $('#jSup').innerHTML='<option value="">Select supplier</option>'+optList(offeredScps(next.supplierId),'id','company',next.supplierId);
+        refreshJobBuildingWarning();
+        refreshExceptionControls();
+        toast('Exception prepared. Save the job to apply it.');
+      });
+    });
+    $$('[data-remove-exception]',$('#jExceptionControls')).forEach(function(button){
+      button.addEventListener('click',function(){
+        if(!canApproveRestrictedJob())return;
+        var id=button.getAttribute('data-remove-exception');
+        confirmDel('Remove this job exception?',
+          'The directory restriction stays in place. Its reason remains in history when you save. Existing jobs are not cancelled or stopped.',
+          function(){
+            if(!canApproveRestrictedJob())return;
+            draftExceptions=draftExceptions.filter(function(a){return a.id!==id;});
+            refreshExceptionControls();
+          },'Remove exception');
+      });
+    });
+  }
+  refreshExceptionControls();
   jc.addEventListener('change',function(){
     buildSiteSelect(js,jc.value,'');
+    refreshExceptionControls();
   });
+  js.addEventListener('change',refreshExceptionControls);
+  $('#jSup').addEventListener('change',refreshExceptionControls);
 
   jt.addEventListener('change',function(){
     fillStatusSelect(trackStatusKeys(jt.value)[0]);
@@ -4048,16 +4230,18 @@ function openJob(id){
         }
       }
 
+      saveWorkExceptions(r,draftExceptions);
       save();
       closeScrimModal('jobScrim','jobModal');
       render();
       toast(isNew?'Work added':'Work saved');
     },function(){
-      var blocked=jobLinkBlock(isNew?null:r,{
-        clientId:$('#jClient').value,
-        siteId:$('#jSite').value,
-        supplierId:$('#jSup').value
-      });
+      var beforeIds=(r.workExceptions||[]).map(function(a){return a.id;}).sort().join('|');
+      var afterIds=draftExceptions.map(function(a){return a.id;}).sort().join('|');
+      if(beforeIds!==afterIds&&!canApproveRestrictedJob()){
+        toast('You cannot change job exceptions.');return false;
+      }
+      var blocked=jobLinkBlock(isNew?null:r,exceptionProbe(),draftExceptions);
       if(blocked){toast(blocked);return false;}
       return true;
     });
@@ -4123,25 +4307,19 @@ function attHtml(atts){
     return '<a class="tl-file" href="'+a.url+'" download="'+esc(a.name)+'" target="_blank"><i data-lucide="paperclip"></i><span>'+esc(a.name)+'</span></a>';
   }).join('')+'</div>';
 }
-function jobWorkCutoffHtml(r){
-  var client=r.clientId?clientById(r.clientId):null;
-  var hit=r.siteId?siteById(r.siteId):null;
-  var contractor=r.supplierId?scpById(r.supplierId):null;
-  var records=[
-    {label:'Client',record:client||(hit&&hit.client)},
-    {label:'Site',record:hit&&hit.site},
-    {label:'Contractor',record:contractor}
-  ];
-  return records.map(function(item){
+function jobWorkCutoffHtml(r,isNew){
+  return jobRestrictionRecords(r).map(function(item){
     var date=dirStopDate(item.record);
     if(!date)return '';
-    var upcoming=date>localDateKey();
+    var upcoming=date>localDateKey(),approval=matchingWorkException(r,item);
     var name=item.record.name||item.record.company||'';
+    var detail=approval
+      ?'Exception for this job only. Recorded by '+approval.by+'. Reason: '+approval.reason
+      :(upcoming?'Scheduled restriction.':'Restriction active.')+
+        (isNew?' A current restriction needs a job exception before saving.':' No exception recorded for this restriction. This existing job can continue.');
     return '<div class="work-cutoff'+(upcoming?' upcoming':'')+'">'+
       '<strong>'+esc(item.label+': No new work from '+fmtDate(date))+'</strong>'+
-      '<p>'+esc(name)+'</p>'+
-      '<p>'+(upcoming?'Scheduled restriction.':'Restriction active.')+' This existing job can continue.</p>'+
-      '</div>';
+      '<p>'+esc(name)+'</p><p>'+esc(detail)+'</p></div>';
   }).join('');
 }
 function timelineHtml(r){
@@ -4173,7 +4351,7 @@ function timelineHtml(r){
       var e=items[i].rec;
       var what = e.cat ? (e.res ? esc(e.cat)+': '+esc(e.res) : esc(e.cat)) : '';
       var alert=(e.cat==='Cancelled'||e.cat==='Reopened');
-      var availability=/^(Client|Site|Contractor) availability$/.test(e.cat||'');
+      var availability=/^(Client|Site|Contractor) availability$/.test(e.cat||'')||/^Job exception (approved|removed)$/.test(e.cat||'');
       lines.push('<li class="ev-line'+(alert?' ev-alert':'')+(availability?' ev-availability':'')+'"><span class="ev-what">'+what+'</span><span class="ev-when">'+evTime(e.t)+'</span></li>');
       i++;
     }
