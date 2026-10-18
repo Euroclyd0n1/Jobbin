@@ -758,6 +758,13 @@ button.life:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; 
 .ev-line.ev-alert{ font-weight:700; color:var(--red); }
 .ev-line.ev-alert:before{ opacity:.9; }
 .ev-run:hover .ev-line.ev-alert{ color:var(--red); }
+.work-cutoff{ margin:12px 0; padding:12px 14px; border:2px solid #fff; border-radius:10px; background:#8b1e28; color:#fff; font-size:0.85rem; line-height:1.5; overflow-wrap:anywhere; }
+.work-cutoff.upcoming{ background:#ffd580; color:#251800; border-color:#8a5600; }
+.work-cutoff strong{ display:block; font-size:0.9rem; font-weight:750; }
+.work-cutoff p{ margin:4px 0 0; color:inherit; }
+.ev-line.ev-availability,.ev-run:hover .ev-line.ev-availability{ margin:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--ink); font-size:0.78rem; font-weight:700; }
+.ev-line.ev-availability:before{ display:block; opacity:.85; }
+.ev-line.ev-availability .ev-when{ opacity:1; font-weight:500; }
 .cancel-note{ display:flex; gap:10px; padding:12px 13px; margin-bottom:14px; border:1px solid var(--red); border-radius:var(--r-sm); background:var(--red-soft); }
 .cancel-note i{ width:16px; height:16px; color:var(--red); flex:0 0 auto; margin-top:2px; }
 .cancel-note .cn-main{ min-width:0; }
@@ -1306,59 +1313,82 @@ function workById(id){ return byId(DB.works,id); }
 function taskById(id){ return byId(DB.tasks,id); }
 function scpById(id){ return byId(DB.scps,id); }
 function clientById(id){ return byId(DB.clients,id); }
-/* ---- Directory lifecycle (V31.5.1A). Stable key + behaviour flag, never a
-   boolean and never the display label. "offer" is the only behaviour:
-   is this record offered when raising a NEW job? ---- */
-var DIR_STATES=[
-  {key:'bau',label:'BAU',offer:true},
-  {key:'hold',label:'On hold',offer:false},
-  {key:'stopped',label:'Stopped',offer:false}
-];
-function dirState(rec){ var k=(rec&&rec.state)||'bau'; return DIR_STATES.find(function(s){return s.key===k;})||DIR_STATES[0]; }
+/* ---- Directory availability: BAU or a dated stop on new work. ---- */
+function localDateKey(value){
+  var d=value==null?new Date():new Date(value);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function dirStopDate(rec){
+  if(!rec||rec.state==='bau'||!rec.state)return '';
+  if(rec.state!=='stopped'&&rec.state!=='hold')return '';
+  return rec.stopNewWorkOn||localDateKey();
+}
+function dirState(rec){
+  var date=dirStopDate(rec);
+  if(!date)return {key:'bau',label:'BAU',offer:true};
+  return {key:date>localDateKey()?'hold':'stopped',label:'No new work from '+fmtDate(date),offer:date>localDateKey()};
+}
 function isOffered(rec){ return dirState(rec).offer; }
-/* A record is unavailable for new work if its OWN state blocks it, OR a parent
-   above it blocks it. The parent's state is READ, never copied onto the child,
-   so coming off hold restores every child's own state with no repair work. */
 function dirBlock(rec,parent){
-  if(parent && !isOffered(parent)) return {by:'parent', state:dirState(parent), rec:parent};
-  if(rec && !isOffered(rec)) return {by:'own', state:dirState(rec), rec:rec};
+  if(parent&&!isOffered(parent))return {by:'parent',state:dirState(parent),rec:parent};
+  if(rec&&!isOffered(rec))return {by:'own',state:dirState(rec),rec:rec};
   return null;
 }
 function sitesUnder(c){ var out=[]; ((c&&c.managers)||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ out.push(s); }); }); return out; }
-function fmtStopped(ts){ return ts?new Date(ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''; }
 function openJobsFor(match){ return (DB.works||[]).filter(function(w){ return match(w) && !statusIsFinished(w); }); }
 function lifeBadge(rec,key,cls,parent){
-  var blk=dirBlock(rec,parent), inherited=!!(blk&&blk.by==='parent');
-  var shown=inherited?blk.state.key:dirState(rec).key;
-  var label=inherited?(blk.state.label+' · via client'):dirState(rec).label;
-  return '<button type="button" class="life'+(cls?' '+cls:'')+(inherited?' life-inherit':'')+'" data-s="'+shown+'" data-life="'+key+'" title="'+(inherited?'Blocked by its client, change it there':'Change availability')+'"><span class="pip"></span>'+esc(label)+'</button>';
+  var ownDate=dirStopDate(rec), parentDate=dirStopDate(parent);
+  var inherited=!!(parentDate&&(!ownDate||parentDate<=ownDate));
+  var shown=dirState(inherited?parent:rec);
+  var label=shown.label+(inherited?' · via client':'');
+  return '<button type="button" class="life'+(cls?' '+cls:'')+(inherited?' life-inherit':'')+'" data-s="'+shown.key+'" data-life="'+key+'" title="Change availability"><span class="pip"></span>'+esc(label)+'</button>';
 }
-function stoppedTag(rec){ return (rec&&rec.state==='stopped'&&rec.stoppedAt)?'<span class="stopped-on">Stopped '+esc(fmtStopped(rec.stoppedAt))+'</span>':''; }
-function setDirState(rec,key,label,jobMatch){
-  var to=DIR_STATES.find(function(s){return s.key===key;});
-  if(!to||!rec||rec.state===key) return;
-  rec.state=key;
-  rec.stoppedAt=(key==='stopped')?Date.now():null;
-  /* The person who hits the surprise is whoever opens the job, so the line
-     goes onto every job still in flight. A history line, never a comment. */
-  if(jobMatch) openJobsFor(jobMatch).forEach(function(w){ logEvent(w,label+' availability', to.label); });
-  save(); render(); toast(label+' set to '+to.label);
+function stoppedTag(rec){ return ''; }
+function setDirState(rec,date,label,jobMatch){
+  if(dirStopDate(rec)===date)return;
+  rec.state=date?'stopped':'bau';
+  rec.stopNewWorkOn=date;
+  rec.stoppedAt=null;
+  var detail=date?'No new work from '+fmtDate(date):'BAU';
+  if(jobMatch)openJobsFor(jobMatch).forEach(function(w){logEvent(w,label+' availability',detail);});
+  save(); render(); toast(label+': '+detail);
 }
 function openLifeMenu(anchor,key){
-  var p=key.split(':'), kind=p[0], rec=null, parent=null, name='', label='', jobMatch=null;
-  if(kind==='client'){ rec=clientById(p[1]); if(!rec)return; name=rec.name; label='Client'; jobMatch=function(w){ return w.clientId===rec.id; }; }
-  else if(kind==='site'){ var c=clientById(p[1]); if(!c)return; var m=byId(c.managers,p[2]); if(!m)return; rec=byId(m.sites,p[3]); if(!rec)return; parent=c; name=rec.name; label='Site'; jobMatch=function(w){ return w.siteId===rec.id; }; }
-  else { rec=scpById(p[1]); if(!rec)return; name=rec.company; label='Contractor'; jobMatch=function(w){ return w.supplierId===rec.id; }; }
-  var blk=dirBlock(rec,parent);
-  if(blk && blk.by==='parent'){ toast(name+' is blocked by '+parent.name+'. Change it on the client.'); return; }
-  openCellDropdown(anchor,DIR_STATES.map(function(s){ return {value:s.key,label:s.label}; }),rec.state||'bau',function(v){
-    if(v===rec.state) return;
-    if(v==='bau'){ setDirState(rec,v,label,jobMatch); return; }
-    var jobs=openJobsFor(jobMatch).length, kids=(kind==='client')?sitesUnder(rec).length:0;
-    var msg=(kids?('Its '+kids+' site'+(kids===1?'':'s')+' stop being available for new jobs too. '):'')+
-      (jobs?(jobs+' job'+(jobs===1?'':'s')+' still open. They carry on and finish normally.'):'Nothing in flight.');
-    confirmDel(v==='hold'?('Put '+name+' on hold?'):('Stop '+name+'?'),msg,function(){ setDirState(rec,v,label,jobMatch); },v==='hold'?'Put on hold':'Stop');
-  });
+  var p=key.split(':'),kind=p[0],rec=null,parent=null,name='',label='',jobMatch=null;
+  if(kind==='client'){rec=clientById(p[1]);if(!rec)return;name=rec.name;label='Client';jobMatch=function(w){return w.clientId===rec.id;};}
+  else if(kind==='site'){
+    parent=clientById(p[1]);if(!parent)return;
+    var manager=byId(parent.managers,p[2]);if(!manager)return;
+    rec=byId(manager.sites,p[3]);if(!rec)return;
+    name=rec.name;label='Site';jobMatch=function(w){return w.siteId===rec.id;};
+  }else{rec=scpById(p[1]);if(!rec)return;name=rec.company;label='Contractor';jobMatch=function(w){return w.supplierId===rec.id;};}
+  var date=dirStopDate(rec),parentDate=dirStopDate(parent);
+  openAdd('Availability: '+name,
+    '<p class="st-note">BAU allows new jobs. Set a date to stop new work from that day. Existing jobs can still be finished.</p>'+
+    (kind==='client'?'<p class="st-note">This also applies to all sites under this client.</p>':'')+
+    (parentDate?'<p class="st-note">Client rule: '+esc(parent.name)+' accepts no new work from '+esc(fmtDate(parentDate))+'. This site cannot override that date; the earlier date applies.</p>':'')+
+    '<label style="display:flex;gap:8px;align-items:center;margin:12px 0"><input type="checkbox" id="availabilityStop" '+(date?'checked':'')+'>Stop new work from</label>'+
+    field('First day with no new work','availabilityDate',date||localDateKey(),'date'),
+    function(){
+      var next=$('#availabilityStop').checked?$('#availabilityDate').value:'';
+      if($('#availabilityStop').checked&&!next){toast('Enter the date to stop new work');return false;}
+      setDirState(rec,next,label,jobMatch);
+    });
+  var toggle=$('#availabilityStop'),input=$('#availabilityDate');
+  function sync(){input.disabled=!toggle.checked;}
+  toggle.addEventListener('change',sync);sync();
+}
+function jobLinkBlock(previous,next){
+  var old=previous||{},c=next.clientId?clientById(next.clientId):null;
+  var hit=next.siteId?siteById(next.siteId):null;
+  var supplier=next.supplierId?scpById(next.supplierId):null;
+  if(next.clientId&&next.clientId!==old.clientId&&(!c||!isOffered(c)))return 'This client is not accepting new work.';
+  if(next.siteId&&(next.siteId!==old.siteId||next.clientId!==old.clientId)){
+    if(!hit||hit.client.id!==next.clientId)return 'Choose a site belonging to this client.';
+    if(dirBlock(hit.site,hit.client))return 'This site or its client is not accepting new work.';
+  }
+  if(next.supplierId&&next.supplierId!==old.supplierId&&(!supplier||!isOffered(supplier)))return 'This contractor is not accepting new work.';
+  return '';
 }
 /* Capture phase, so a badge inside a collapsible row never toggles it. */
 document.addEventListener('click',function(e){
@@ -1370,6 +1400,47 @@ document.addEventListener('click',function(e){
 /* ---- Link, don't copy: jobs hold IDs, display names resolve at render ---- */
 function eachSite(fn){ (DB.clients||[]).forEach(function(c){ (c.managers||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ fn(s,c,m); }); }); }); }
 function siteById(id){ if(!id) return null; var hit=null; eachSite(function(s,c){ if(s.id===id) hit={site:s,client:c}; }); return hit; }
+function buildingClosureInfo(s){
+  if(!s||!s.buildingClosed)return null;
+  var now=new Date();
+  var today=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  var date=s.buildingClosedOn||'';
+  var upcoming=!!date&&date>today;
+  return {
+    upcoming:upcoming,
+    label:upcoming?'Closes on '+fmtDate(date):'Closed'+(date?' since '+fmtDate(date):''),
+    message:upcoming
+      ?s.name+' closes on '+fmtDate(date)+'. If attendance is on or after that date, arrange access first.'
+      :s.name+' is closed. Arrange access before anyone attends.'
+  };
+}
+function closedBuildingBadge(s){
+  var info=buildingClosureInfo(s);
+  if(!info)return '';
+  return '<span class="attn-tag '+(info.upcoming?'chase':'over')+'" style="white-space:normal;margin:4px 0" title="'+esc(info.message)+'">'+esc(info.label)+'</span>';
+}
+function jobClosedBuildingBadge(w){
+  var hit=siteById(w&&w.siteId);
+  return closedBuildingBadge(hit&&hit.site);
+}
+function closedBuildingMessage(siteId){
+  var hit=siteById(siteId), info=buildingClosureInfo(hit&&hit.site);
+  return info?info.message:'';
+}
+function refreshJobBuildingWarning(){
+  var box=$('#jBuildingWarning'), site=$('#jSite');
+  if(!box||!site)return;
+  var hit=siteById(site.value), msg=closedBuildingMessage(site.value);
+  box.innerHTML=msg?closedBuildingBadge(hit.site)+'<p class="st-note">'+esc(msg)+'</p>':'';
+}
+document.addEventListener('change',function(e){
+  if(e.target.id==='jSite'||e.target.id==='jClient')refreshJobBuildingWarning();
+});
+document.addEventListener('focusin',function(e){
+  if(e.target.id!=='jDue')return;
+  var site=$('#jSite'), msg=closedBuildingMessage(site&&site.value);
+  if(msg)toast(msg);
+});
 function jobClient(w){ var c=(w&&w.clientId)?clientById(w.clientId):null; return c?c.name:((w&&w.client)||''); }
 function jobSite(w){ var hit=(w&&w.siteId)?siteById(w.siteId):null; return hit?hit.site.name:((w&&w.site)||''); }
 function jobSupplier(w){ var p=(w&&w.supplierId)?scpById(w.supplierId):null; return p?p.company:((w&&w.supplier)||''); }
@@ -1380,7 +1451,7 @@ function jobsUsingSite(s){ return jobsUsingSiteIds([s.id]); }
 function jobsUsingScp(s){ return (DB.works||[]).filter(function(w){ return w.supplierId===s.id; }).length; }
 function blockLinkedDelete(label,count){
   if(!count)return false;
-  toast(label+' is linked to '+count+' job'+(count===1?'':'s')+'. Set it to Stopped instead.');
+  toast(label+' is linked to '+count+' job'+(count===1?'':'s')+'. Use Stop new work from instead.');
   return true;
 }
 function rowIdOf(el){ var tr=el.closest('tr'); return tr&&tr.dataset.id; }
@@ -1458,7 +1529,7 @@ function setAppearanceAccent(accent){
   if(view==='settings')render();
 }
 function blank(){ return {works:[],internal:[],clients:[],scps:[],tasks:[],trades:['Electrical','Mechanical','Plumbing','Fabric','HVAC','Fire Safety','Grounds','Cleaning','Roofing','Drainage'],settings:{},companySettings:{},userPrefs:{},schemaVersion:1}; }
-var CURRENT_SCHEMA_VERSION=8;
+var CURRENT_SCHEMA_VERSION=10;
 var MIGRATIONS=[
   // v1 -> v2: give every supply-chain partner an empty structured coverage list
   function(data){
@@ -1574,6 +1645,40 @@ var MIGRATIONS=[
       if(!Array.isArray(w.cancellations)) w.cancellations=[];
       w.cancellations.forEach(function(c){ if(!c.type) c.type='cancelled'; });
     });
+    return data;
+  },
+  // v8 -> v9: physical building closure is separate from business availability
+  function(data){
+    (data.clients||[]).forEach(function(c){
+      (c.managers||[]).forEach(function(m){
+        (m.sites||[]).forEach(function(s){
+          if(typeof s.buildingClosed!=='boolean') s.buildingClosed=false;
+          if(typeof s.buildingClosedOn!=='string') s.buildingClosedOn='';
+        });
+      });
+    });
+    return data;
+  },
+  // v9 -> v10: combine directory holds/stops into a dated new-work cutoff.
+  function(data){
+    var today=localDateKey();
+    function upgrade(rec){
+      if(rec.state==='hold'||rec.state==='stopped'){
+        if(!rec.stopNewWorkOn){
+          var oldDate=rec.stoppedAt?localDateKey(rec.stoppedAt):today;
+          rec.stopNewWorkOn=/^\d{4}-\d{2}-\d{2}$/.test(oldDate)&&oldDate<=today?oldDate:today;
+        }
+        rec.state='stopped';
+      }else{
+        rec.state='bau';
+        rec.stopNewWorkOn='';
+      }
+    }
+    (data.clients||[]).forEach(function(c){
+      upgrade(c);
+      (c.managers||[]).forEach(function(m){(m.sites||[]).forEach(upgrade);});
+    });
+    (data.scps||[]).forEach(upgrade);
     return data;
   }
 ];
@@ -1936,8 +2041,8 @@ function bindComposer(boxSel,onSend,refresh){
 }
 function clientNames(){ return DB.clients.map(function(c){return c.name;}); }
 function sitesForClient(name){ var c=DB.clients.find(function(x){return x.name===name;}); if(!c)return[]; var out=[]; c.managers.forEach(function(m){ m.sites.forEach(function(s){ if(out.indexOf(s.name)<0)out.push(s.name); }); }); return out; }
-/* Pickers write permanent IDs. Only BAU records are offered, but whatever this
-   job already references stays selectable so historical jobs still render. */
+/* Pickers write permanent IDs. Records are offered until their cutoff date.
+   Existing job links stay selectable so those jobs can still be finished. */
 function offeredClients(keepId){ return (DB.clients||[]).filter(function(c){ return isOffered(c)||c.id===keepId; }); }
 function offeredSitesFor(clientId,keepId){ var out=[],c=clientId?clientById(clientId):null; if(!c)return out; (c.managers||[]).forEach(function(m){ (m.sites||[]).forEach(function(s){ if(!dirBlock(s,c)||s.id===keepId) out.push(s); }); }); return out; }
 function offeredScps(keepId){ return (DB.scps||[]).filter(function(p){ return isOffered(p)||p.id===keepId; }); }
@@ -2638,9 +2743,13 @@ function rowHtml(r){
 function startEdit(td){
   if(td.querySelector('input,select'))return;
   var id=rowIdOf(td),f=td.dataset.f,rec=workById(id),cur=rec[f]==null?'':rec[f];
-  if(f==='client'){ openCellDropdown(td,[''].concat(offeredClients(rec.clientId).map(function(c){return {value:c.id,label:c.name};})),rec.clientId||'',function(v){ if(v!==rec.clientId){ rec.clientId=v; rec.client=''; rec.siteId=''; rec.site=''; logEvent(rec,'Client', jobClient(rec)); } save(); render(); }); return; }
-  if(f==='site'){ if(!rec.clientId){ toast('Pick a client first'); return; } openCellDropdown(td,[''].concat(offeredSitesFor(rec.clientId,rec.siteId).map(function(s){return {value:s.id,label:s.name};})),rec.siteId||'',function(v){ if(v!==rec.siteId){ rec.siteId=v; rec.site=''; logEvent(rec,'Site', jobSite(rec)); } save(); render(); }); return; }
-  if(f==='supplier'){ openCellDropdown(td,[''].concat(offeredScps(rec.supplierId).map(function(p){return {value:p.id,label:p.company};})),rec.supplierId||'',function(v){ if(v!==rec.supplierId){ rec.supplierId=v; rec.supplier=''; logEvent(rec,'Supplier', jobSupplier(rec)); } save(); render(); }); return; }
+  if(f==='dueDate'){
+    var accessWarning=closedBuildingMessage(rec.siteId);
+    if(accessWarning)toast(accessWarning);
+  }
+  if(f==='client'){ openCellDropdown(td,[''].concat(offeredClients(rec.clientId).map(function(c){return {value:c.id,label:c.name};})),rec.clientId||'',function(v){ var blocked=jobLinkBlock(rec,{clientId:v,siteId:'',supplierId:rec.supplierId}); if(blocked){toast(blocked);return;} if(v!==rec.clientId){ rec.clientId=v; rec.client=''; rec.siteId=''; rec.site=''; logEvent(rec,'Client', jobClient(rec)); } save(); render(); }); return; }
+  if(f==='site'){ if(!rec.clientId){ toast('Pick a client first'); return; } openCellDropdown(td,[''].concat(offeredSitesFor(rec.clientId,rec.siteId).map(function(s){return {value:s.id,label:s.name};})),rec.siteId||'',function(v){ var blocked=jobLinkBlock(rec,{clientId:rec.clientId,siteId:v,supplierId:rec.supplierId}); if(blocked){toast(blocked);return;} if(v!==rec.siteId){ rec.siteId=v; rec.site=''; logEvent(rec,'Site', jobSite(rec)); } save(); render(); }); return; }
+  if(f==='supplier'){ openCellDropdown(td,[''].concat(offeredScps(rec.supplierId).map(function(p){return {value:p.id,label:p.company};})),rec.supplierId||'',function(v){ var blocked=jobLinkBlock(rec,{clientId:rec.clientId,siteId:rec.siteId,supplierId:v}); if(blocked){toast(blocked);return;} if(v!==rec.supplierId){ rec.supplierId=v; rec.supplier=''; logEvent(rec,'Supplier', jobSupplier(rec)); } save(); render(); }); return; }
   var el;
   if(f==='dueDate'||f==='dateReceived'){ el=document.createElement('input'); el.type='date'; el.value=cur; }
   else if(f==='value'){ el=document.createElement('input'); el.type='number'; el.step='0.01'; el.value=cur; }
@@ -2730,7 +2839,8 @@ function cancellationNoteHtml(rec){
   '</div>';
 }
 
-function setJobStatus(rec,key,onDone){
+function setJobStatus(rec,key,onDone,beforeApply){
+  if(beforeApply&&beforeApply()===false)return;
   var next=statusByKey(key),prev=rec.statusKey;
   if(!next||key===prev){
     if(onDone)onDone(false);
@@ -2740,6 +2850,7 @@ function setJobStatus(rec,key,onDone){
   var reopening=prev==='cancelled';
 
   function apply(reason){
+    if(beforeApply&&beforeApply()===false)return;
     if(key==='on-hold'&&prev!=='on-hold'){
       rec.preHoldStatusKey=prev;
     }
@@ -2832,7 +2943,7 @@ function clientCard(c){
   var t=qClients.toLowerCase();
   var st=jobStatsFor(c.name);
   var rgmsOpen=t?c.managers.some(function(m){return mgrMatches(m,t);}):!!openSet[c.id+':rgms'];
-  return '<div class="pcard'+(c.state==='stopped'?' dir-stopped':'')+'" data-id="'+c.id+'">'+
+  return '<div class="pcard'+(!isOffered(c)?' dir-stopped':'')+'" data-id="'+c.id+'">'+
     '<div class="card-act"><button class="icon-btn" data-editclient="'+c.id+'"><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delclient="'+c.id+'"><i data-lucide="trash-2"></i></button></div>'+
     '<div class="nm"><span class="av" style="background:'+avc(c.name)+'">'+initials(c.name)+'</span><span class="namebits">'+esc(c.name)+lifeBadge(c,'client:'+c.id,'',null)+stoppedTag(c)+'</span></div>'+
     '<div class="cstats">'+
@@ -2863,6 +2974,7 @@ function siteItem(c,m,s,t){
     : '<div style="font-size:12px;color:var(--ink-3);padding:4px 8px">No key people yet.</div>';
   return '<div class="nitem'+(open?' open':'')+(dirBlock(s,c)&&dirBlock(s,c).state.key==='stopped'?' dir-stopped':'')+'">'+
     '<div class="nitem-top" data-toggle="'+s.id+'"><i data-lucide="chevron-right" class="chev"></i><span class="nm3"><i data-lucide="map-pin"></i>'+esc(s.name)+'</span>'+lifeBadge(s,'site:'+c.id+':'+m.id+':'+s.id,'sm',c)+'<span class="ct">'+s.people.length+'</span><span class="acts"><button class="icon-btn" data-editsite="'+c.id+':'+m.id+':'+s.id+'"><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delsite="'+c.id+':'+m.id+':'+s.id+'"><i data-lucide="trash-2"></i></button></span></div>'+
+    closedBuildingBadge(s)+
     (s.address?'<div class="addr">'+esc(s.address)+(s.phone?' · '+esc(s.phone):'')+'</div>':'')+
     '<div class="nitem-body">'+
     peopleHtml+
@@ -2903,7 +3015,7 @@ function scpCard(s){
     (avail.length?'<div class="trade-add-row"><select data-addtrade="'+s.id+'"><option value="">+ Add trade…</option>'+avail.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select></div>':'<div style="font-size:11px;color:var(--ink-3);margin-top:8px">All master trades added. Manage the list in Settings.</div>');
   var peopleBody=(people.length?people.map(function(p){return '<div class="scp-person" data-pid="'+p.id+'"><div class="sp-main"><span class="sp-name">'+esc(p.name)+'</span>'+([p.role,p.email,p.phone].filter(Boolean).length?'<span class="sp-sub">'+[p.role,p.email,p.phone].filter(Boolean).map(esc).join(' · ')+'</span>':'')+'</div><span class="acts"><button class="icon-btn" data-editscpperson="'+s.id+'|'+p.id+'" title="Edit person"><i data-lucide="pen-line"></i></button><button class="trm" data-rmscpperson="'+s.id+'|'+p.id+'" title="Remove person"><i data-lucide="x"></i></button></span></div>';}).join(''):'<div style="font-size:12px;color:var(--ink-3);padding:4px 8px">No people yet.</div>')+
     '<button class="addrow" data-addscpperson="'+s.id+'"><i data-lucide="user-plus"></i>Add person</button>';
-  return '<div class="pcard'+(s.state==='stopped'?' dir-stopped':'')+'" data-id="'+s.id+'"><div class="card-act"><button class="icon-btn" data-editscp><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delscp><i data-lucide="trash-2"></i></button></div>'+
+  return '<div class="pcard'+(!isOffered(s)?' dir-stopped':'')+'" data-id="'+s.id+'"><div class="card-act"><button class="icon-btn" data-editscp><i data-lucide="pen-line"></i></button><button class="icon-btn del" data-delscp><i data-lucide="trash-2"></i></button></div>'+
     '<div class="nm"><span class="av" style="background:'+avc(s.company)+'">'+initials(s.company)+'</span><span class="namebits">'+esc(s.company)+lifeBadge(s,'scp:'+s.id,'',null)+stoppedTag(s)+'</span></div>'+
     '<div class="meta">'+(s.phone?'<div><i data-lucide="phone"></i>'+esc(s.phone)+'</div>':'')+'<button type="button" class="coverage-edit'+(coverage.length?'':' coverage-empty')+'" data-editcoverage title="Edit coverage areas"><i data-lucide="map"></i>'+coverageText+'</button></div>'+
     '<div class="cstats">'+
@@ -3724,6 +3836,7 @@ function openJob(id){
   m.innerHTML=
     '<div class="modal-head">'+
       '<h2>'+(isNew?'New work':esc(r.wqRef||'Work'))+'</h2>'+
+      '<div id="jBuildingWarning"></div>'+
       '<button class="icon-btn" id="jobClose"><i data-lucide="x"></i></button>'+
     '</div>'+
     '<div class="modal-body">'+
@@ -3752,6 +3865,7 @@ function openJob(id){
         '</div>'+
       '</div>'+
       cancellationNoteHtml(r)+
+      (isNew?'':jobWorkCutoffHtml(r))+
       '<div class="field"><label>Status</label><select id="jStatus"></select></div>'+
       '<div class="field"><label>Description</label><input id="jDesc" value="'+esc(r.description||'')+'"></div>'+
       '<div class="grid-2">'+
@@ -3786,6 +3900,7 @@ function openJob(id){
 
   var js=$('#jSite');
   buildSiteSelect(js,r.clientId||'',r.siteId||'');
+  refreshJobBuildingWarning();
 
   var jt=$('#jTrack');
   var jst=$('#jStatus');
@@ -3937,6 +4052,14 @@ function openJob(id){
       closeScrimModal('jobScrim','jobModal');
       render();
       toast(isNew?'Work added':'Work saved');
+    },function(){
+      var blocked=jobLinkBlock(isNew?null:r,{
+        clientId:$('#jClient').value,
+        siteId:$('#jSite').value,
+        supplierId:$('#jSup').value
+      });
+      if(blocked){toast(blocked);return false;}
+      return true;
     });
   });
 
@@ -3967,9 +4090,10 @@ function openJob(id){
 function openDrawer(id){
   var r=workById(id); if(!r)return;
   var d=$('#drawer');
-  d.innerHTML='<div class="drawer-head"><div><div class="ttl">'+esc(r.wqRef||'Updates')+'</div><div class="sub">'+esc([jobClient(r),jobSite(r)].filter(Boolean).join(' · ')||'Activity timeline')+'</div></div><button class="icon-btn" id="drClose"><i data-lucide="x"></i></button></div>'+
+  d.innerHTML='<div class="drawer-head"><div><div class="ttl">'+esc(r.wqRef||'Updates')+' '+jobClosedBuildingBadge(r)+'</div><div class="sub">'+esc([jobClient(r),jobSite(r)].filter(Boolean).join(' · ')||'Activity timeline')+'</div></div><button class="icon-btn" id="drClose"><i data-lucide="x"></i></button></div>'+
     '<div class="drawer-body">'+
     cancellationNoteHtml(r)+
+    jobWorkCutoffHtml(r)+
     composerHtml('drComposer')+
     '<div id="drTimeline">'+timelineHtml(r)+'</div>'+
     '</div>';
@@ -3998,6 +4122,27 @@ function attHtml(atts){
     if(isImg) return '<a class="tl-file img" href="'+a.url+'" download="'+esc(a.name)+'" target="_blank" title="'+esc(a.name)+'"><img src="'+a.url+'" alt="'+esc(a.name)+'"></a>';
     return '<a class="tl-file" href="'+a.url+'" download="'+esc(a.name)+'" target="_blank"><i data-lucide="paperclip"></i><span>'+esc(a.name)+'</span></a>';
   }).join('')+'</div>';
+}
+function jobWorkCutoffHtml(r){
+  var client=r.clientId?clientById(r.clientId):null;
+  var hit=r.siteId?siteById(r.siteId):null;
+  var contractor=r.supplierId?scpById(r.supplierId):null;
+  var records=[
+    {label:'Client',record:client||(hit&&hit.client)},
+    {label:'Site',record:hit&&hit.site},
+    {label:'Contractor',record:contractor}
+  ];
+  return records.map(function(item){
+    var date=dirStopDate(item.record);
+    if(!date)return '';
+    var upcoming=date>localDateKey();
+    var name=item.record.name||item.record.company||'';
+    return '<div class="work-cutoff'+(upcoming?' upcoming':'')+'">'+
+      '<strong>'+esc(item.label+': No new work from '+fmtDate(date))+'</strong>'+
+      '<p>'+esc(name)+'</p>'+
+      '<p>'+(upcoming?'Scheduled restriction.':'Restriction active.')+' This existing job can continue.</p>'+
+      '</div>';
+  }).join('');
 }
 function timelineHtml(r){
   var items=[];
@@ -4028,7 +4173,8 @@ function timelineHtml(r){
       var e=items[i].rec;
       var what = e.cat ? (e.res ? esc(e.cat)+': '+esc(e.res) : esc(e.cat)) : '';
       var alert=(e.cat==='Cancelled'||e.cat==='Reopened');
-      lines.push('<li class="ev-line'+(alert?' ev-alert':'')+'"><span class="ev-what">'+what+'</span><span class="ev-when">'+evTime(e.t)+'</span></li>');
+      var availability=/^(Client|Site|Contractor) availability$/.test(e.cat||'');
+      lines.push('<li class="ev-line'+(alert?' ev-alert':'')+(availability?' ev-availability':'')+'"><span class="ev-what">'+what+'</span><span class="ev-when">'+evTime(e.t)+'</span></li>');
       i++;
     }
     out.push('<div class="ev-run"><div class="ev-who">'+esc(who)+'</div><ul>'+lines.join('')+'</ul></div>');
@@ -4082,11 +4228,33 @@ function editMgr(clientId,mgrId){
     function(){ var nm=$('#fmName').value.trim(); if(!nm){toast('Name is required');return false;} if(mgrId){ m.name=nm; m.email=$('#fmEmail').value.trim(); m.phone=$('#fmPhone').value.trim(); } else { c.managers.push({id:uid(),name:nm,email:$('#fmEmail').value.trim(),phone:$('#fmPhone').value.trim(),sites:[]}); openSet[c.id+':rgms']=1; } save(); toast(mgrId?'Manager saved':'Manager added'); });
 }
 function editSite(clientId,mgrId,siteId){
-  var c=clientById(clientId); if(!c)return; var m=byId(c.managers,mgrId); if(!m)return;
-  var s=siteId?byId(m.sites,siteId):{name:'',address:'',phone:''};
+  var c=clientById(clientId); if(!c)return;
+  var m=byId(c.managers,mgrId); if(!m)return;
+  var s=siteId?byId(m.sites,siteId):{name:'',address:'',phone:'',buildingClosed:false,buildingClosedOn:''};
+  if(!s)return;
   openAdd(siteId?'Edit site':'Add site',
-    field('Site name','fsName',s.name)+field('Address','fsAddr',s.address)+field('Phone','fsPhone',s.phone),
-    function(){ var nm=$('#fsName').value.trim(); if(!nm){toast('Name is required');return false;} if(siteId){ s.name=nm; s.address=$('#fsAddr').value.trim(); s.phone=$('#fsPhone').value.trim(); } else { m.sites.push({id:uid(),name:nm,address:$('#fsAddr').value.trim(),phone:$('#fsPhone').value.trim(),people:[]}); openSet[m.id]=1; } save(); toast(siteId?'Site saved':'Site added'); });
+    field('Site name','fsName',s.name)+field('Address','fsAddr',s.address)+field('Phone','fsPhone',s.phone)+
+    '<label style="display:flex;gap:8px;align-items:center;margin:12px 0"><input type="checkbox" id="fsClosed" '+(s.buildingClosed?'checked':'')+'>This building is closed or scheduled to close</label>'+
+    '<p class="st-note">Warns that access needs arranging. Does not change BAU or the date new work stops, and does not block new jobs.</p>'+
+    field('Building closure date','fsClosedOn',s.buildingClosedOn,'date'),
+    function(){
+      var nm=$('#fsName').value.trim();
+      if(!nm){toast('Name is required');return false;}
+      var closed=$('#fsClosed').checked;
+      var closedOn=closed?$('#fsClosedOn').value:'';
+      if(closed&&!closedOn){toast('Enter the building closure date');return false;}
+      s.name=nm; s.address=$('#fsAddr').value.trim(); s.phone=$('#fsPhone').value.trim();
+      s.buildingClosed=closed; s.buildingClosedOn=closedOn;
+      if(!siteId){
+        s.id=uid(); s.people=[];
+        m.sites.push(s); openSet[m.id]=1;
+      }
+      save().then(function(){toast(siteId?'Site saved':'Site added');});
+    });
+  var toggle=$('#fsClosed'), date=$('#fsClosedOn');
+  function syncDate(){date.disabled=!toggle.checked;}
+  toggle.addEventListener('change',syncDate);
+  syncDate();
 }
 function editSitePerson(clientId,mgrId,siteId,personId){
   var c=clientById(clientId); if(!c)return; var m=byId(c.managers,mgrId); if(!m)return; var s=byId(m.sites,siteId); if(!s)return;
